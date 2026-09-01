@@ -1,0 +1,128 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: journal-archiver-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  minio:
+    image: minio/minio:latest
+    container_name: journal-archiver-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio-data:/data
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.3.2
+    container_name: journal-archiver-rocketmq-namesrv
+    restart: unless-stopped
+    command: sh mqnamesrv
+    ports:
+      - "9876:9876"
+    environment:
+      JAVA_OPT_EXT: "-Xms512m -Xmx512m"
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.3.2
+    container_name: journal-archiver-rocketmq-broker
+    restart: unless-stopped
+    command: sh mqbroker -n rocketmq-namesrv:9876 --enable-proxy
+    # named volume 为 root 属主，镜像默认的 rocketmq 用户无法写入 store 目录
+    user: "0:0"
+    depends_on:
+      - rocketmq-namesrv
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+    environment:
+      JAVA_OPT_EXT: "-Xms512m -Xmx512m -Xmn256m"
+    volumes:
+      - broker-data:/home/rocketmq/store
+
+  elasticsearch:
+    # Docker Hub 官方 elasticsearch 镜像（同一版本、不同基础镜像构建）
+    image: elasticsearch:8.13.4
+    container_name: journal-archiver-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+
+  # 归档应用：SMTP 接收 + MongoDB + S3 + RocketMQ 通知 + 重发接口
+  journal-archiver:
+    build:
+      context: .
+      dockerfile: journal-archiver/Dockerfile
+    container_name: journal-archiver
+    restart: unless-stopped
+    profiles:
+      - app
+    depends_on:
+      - mongodb
+      - minio
+      - rocketmq-namesrv
+    ports:
+      - "8080:8080"
+      - "2525:2525"
+    environment:
+      SPRING_DATA_MONGODB_URI: "mongodb://mongodb:27017/journal_archiver?serverSelectionTimeoutMS=10000&connectTimeoutMS=5000"
+      APP_STORAGE_S3_ENDPOINT: http://minio:9000
+      # kebab-case 属性 name-server 对应的环境变量是单段 NAMESERVER
+      APP_NOTIFY_ROCKETMQ_NAMESERVER: rocketmq-namesrv:9876
+
+  # 清洗应用：RocketMQ 消费者 + S3 读 + Elasticsearch mail_info
+  mail-cleaner:
+    build:
+      context: .
+      dockerfile: mail-cleaner/Dockerfile
+    container_name: mail-cleaner
+    restart: unless-stopped
+    profiles:
+      - app
+    depends_on:
+      - elasticsearch
+      - minio
+      - rocketmq-namesrv
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
+      APP_STORAGE_S3_ENDPOINT: http://minio:9000
+      APP_ROCKETMQ_NAMESERVER: rocketmq-namesrv:9876
+
+  # MCP 查询应用：标准 MCP (Streamable HTTP) 接口，查询 Elasticsearch mail_info
+  mail-mcp-server:
+    build:
+      context: .
+      dockerfile: mail-mcp-server/Dockerfile
+    container_name: mail-mcp-server
+    restart: unless-stopped
+    profiles:
+      - app
+    depends_on:
+      - elasticsearch
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
+
+volumes:
+  mongo-data:
+  minio-data:
+  broker-data:
+  es-data:

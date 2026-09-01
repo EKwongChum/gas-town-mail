@@ -1,0 +1,79 @@
+/*
+ * Copyright 2026 ekwongchum
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package uk.ekwong.mailmcpserver.config;
+
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.Paths;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.media.Content;
+import io.swagger.v3.oas.models.media.MediaType;
+import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.parameters.RequestBody;
+import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.responses.ApiResponses;
+import io.swagger.v3.oas.models.tags.Tag;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * Documents the standard MCP endpoint ({@code POST /mcp}) in the OpenAPI
+ * model served at {@code /v3/api-docs} and {@code /swagger-ui.html}. The MCP
+ * tools themselves (search_mails / get_mail_by_id / count_mails) are listed in
+ * the service README and discoverable by MCP clients via {@code tools/list}.
+ */
+@Configuration
+public class OpenApiConfig {
+
+    @Bean
+    public OpenAPI mailMcpServerOpenApi() {
+        Operation mcpOperation = new Operation()
+                .operationId("mcpStreamableHttp")
+                .summary("MCP Streamable HTTP endpoint")
+                .description("Standard Model Context Protocol endpoint speaking JSON-RPC 2.0 over "
+                        + "Streamable HTTP. Typical requests: initialize (session handshake), "
+                        + "tools/list (discover tools), tools/call (invoke search_mails, "
+                        + "get_mail_by_id or count_mails). Responses are JSON or SSE "
+                        + "(text/event-stream); the Mcp-Session-Id response header must be echoed "
+                        + "on subsequent requests of the same session.")
+                .requestBody(new RequestBody()
+                        .description("JSON-RPC 2.0 request")
+                        .required(true)
+                        .content(new Content().addMediaType("application/json", new MediaType()
+                                .schema(new Schema<>().type("object")))))
+                .responses(new ApiResponses()
+                        .addApiResponse("200", new ApiResponse()
+                                .description("JSON-RPC response (application/json or text/event-stream)"))
+                        .addApiResponse("400", new ApiResponse()
+                                .description("Malformed JSON-RPC request or invalid Accept headers")));
+
+        return new OpenAPI()
+                .info(new Info()
+                        .title("mail-mcp-server API")
+                        .version("1.0.0")
+                        .description("Spring MCP (Model Context Protocol) server that queries archived journal "
+                                + "email metadata from the Elasticsearch mail_info index. MCP clients connect to "
+                                + "POST /mcp (Streamable HTTP) and use tools/list to discover the tools: "
+                                + "search_mails, get_mail_by_id, count_mails. See mail-mcp-server/README.md for the "
+                                + "full interface documentation."))
+                .tags(java.util.List.of(
+                        new Tag().name("MCP")
+                                .description("Model Context Protocol endpoint (Streamable HTTP)")))
+                .paths(new Paths().addPathItem("/mcp", new PathItem().post(mcpOperation)));
+    }
+}

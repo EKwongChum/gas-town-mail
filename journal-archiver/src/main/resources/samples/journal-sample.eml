@@ -1,0 +1,30 @@
+Return-Path: <>
+From: Microsoft Exchange Server <postmaster@corp.local>
+To: journal@archive.local
+Subject: Journal report
+Date: Fri, 16 Aug 2026 10:00:00 +0800
+Message-ID: <journal-wrapper-001@corp.local>
+MIME-Version: 1.0
+X-MS-Journal-Report: application/msgtnef
+Content-Type: multipart/mixed; boundary="journal-boundary"
+
+--journal-boundary
+Content-Type: text/plain; charset="us-ascii"
+
+Journal report for a message sent by alice@example.com.
+
+--journal-boundary
+Content-Type: message/rfc822
+
+From: Alice <alice@example.com>
+To: Bob <bob@example.com>
+Cc: Carol <carol@example.com>
+Subject: Quarterly report
+Date: Fri, 16 Aug 2026 09:30:00 +0800
+Message-ID: <original-123@example.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"
+
+Hello Bob, please review the quarterly numbers.
+
+--journal-boundary--

@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: mail-cleaner
+  elasticsearch:
+    uris: http://localhost:9200
+    connection-timeout: 5s
+    socket-timeout: 30s
+
+server:
+  port: 8081
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+app:
+  rocketmq:
+    name-server: 127.0.0.1:9876
+    consumer-group: mail-cleaner-consumer
+    topic: mail_meta_topic
+    tag: "*"
+    # retry interval when the consumer fails to start (name server unreachable)
+    start-retry-interval-ms: 30000
+  storage:
+    s3:
+      endpoint: http://localhost:9000
+      region: us-east-1
+      access-key: ${S3_ACCESS_KEY:minioadmin}
+      secret-key: ${S3_SECRET_KEY:minioadmin}
+      bucket: journal-emails
+      path-style: true
+      create-bucket-if-missing: false
+
+logging:
+  level:
+    uk.ekwong: INFO
+    org.apache.rocketmq: WARN

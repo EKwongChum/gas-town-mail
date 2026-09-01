@@ -1,0 +1,87 @@
+spring:
+  application:
+    name: journal-archiver
+  data:
+    mongodb:
+      # short server-selection timeout so a Mongo outage does not block
+      # processing threads for 30 seconds per message
+      uri: "mongodb://localhost:27017/journal_archiver?serverSelectionTimeoutMS=10000&connectTimeoutMS=5000"
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+app:
+  smtp:
+    # IP address to bind to; 0.0.0.0 means all interfaces (accept mail from any source)
+    bind-address: 0.0.0.0
+    # host name announced to SMTP clients (HELO/EHLO banner)
+    hostname: journal-archiver.local
+    port: 2525
+    max-message-size: 20971520
+    max-connections: 200
+    max-recipients: 100
+    connection-timeout-seconds: 60
+    require-tls: false
+    # when true, the raw message bytes are stored exactly as received (no injected Received: header)
+    disable-received-headers: true
+  journal:
+    # extract the embedded original message (message/rfc822 part) instead of storing the journal wrapper
+    extract-original-attachment: true
+    # generate a Message-Id when the original message has none, so the archive id stays unique
+    generate-message-id-if-missing: true
+    # treat an email as journal format when it carries Exchange journal report headers
+    detect-by-header: true
+    # treat an email as journal format when it embeds a message/rfc822 attachment
+    detect-by-rfc822-attachment: true
+    # how the "sender" field is resolved: header (Sender header, fallback From),
+    # envelope (SMTP MAIL FROM), or from (always the From address)
+    sender-resolution: header
+  processing:
+    core-pool-size: 2
+    max-pool-size: 8
+    queue-capacity: 500
+    # retry the whole archive pipeline before writing the email to the dead-letter dir
+    retry-max-attempts: 3
+    retry-backoff-ms: 1000
+    dead-letter-dir: ./data/dead-letter
+  resend:
+    # maximum number of ids accepted by the resend endpoint
+    max-ids: 1000
+    parallelism: 4
+    queue-capacity: 1000
+  notify:
+    rocketmq:
+      # notify other services after the email metadata is in MongoDB and the raw email is in object storage
+      enabled: true
+      name-server: 127.0.0.1:9876
+      producer-group: journal-archiver-producer
+      topic: mail_meta_topic
+      tag: mail-meta
+      send-timeout-ms: 3000
+      retry-times-when-send-failed: 2
+  storage:
+    s3:
+      endpoint: http://localhost:9000
+      region: us-east-1
+      access-key: ${S3_ACCESS_KEY:minioadmin}
+      secret-key: ${S3_SECRET_KEY:minioadmin}
+      bucket: journal-emails
+      path-style: true
+      create-bucket-if-missing: true
+
+logging:
+  level:
+    uk.ekwong.journalarchiver: INFO
+    org.subethamail: WARN
