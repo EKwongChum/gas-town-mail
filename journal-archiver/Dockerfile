@@ -30,7 +30,7 @@ RUN mvn -B -pl journal-archiver -am package -DskipTests \
     && cp journal-archiver/target/journal-archiver-*.jar /workspace/app.jar
 
 # ---- runtime stage ----
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:25-jre
 ARG VERSION
 ARG REVISION
 LABEL org.opencontainers.image.title="journal-archiver" \
