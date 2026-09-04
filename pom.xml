@@ -79,7 +79,7 @@
         <!-- code quality / release plugins -->
         <jacoco.version>0.8.12</jacoco.version>
         <spotless.version>2.44.5</spotless.version>
-        <cyclonedx.version>2.8.1</cyclonedx.version>
+        <cyclonedx.version>2.9.3</cyclonedx.version>
     </properties>
 
     <!--
