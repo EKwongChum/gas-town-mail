@@ -39,7 +39,7 @@ jobs:
         run: ./mvnw -B -ntp org.cyclonedx:cyclonedx-maven-plugin:2.8.1:makeAggregateBom
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             artifacts/*.jar
