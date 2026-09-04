@@ -16,10 +16,10 @@
 
 package uk.ekwong.mailcleaner.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.swagger.v3.oas.models.OpenAPI;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class OpenApiConfigTest {
 
@@ -28,8 +28,7 @@ class OpenApiConfigTest {
         OpenAPI api = new OpenApiConfig().mailCleanerOpenApi();
 
         assertThat(api.getInfo().getTitle()).isEqualTo("mail-cleaner API");
-        assertThat(api.getInfo().getVersion()).isEqualTo("1.0.0");
-        assertThat(api.getTags()).extracting(tag -> tag.getName())
-                .contains("Mail info management");
+        assertThat(api.getInfo().getVersion()).isEqualTo("0.1.0");
+        assertThat(api.getTags()).extracting(tag -> tag.getName()).contains("Mail info management");
     }
 }

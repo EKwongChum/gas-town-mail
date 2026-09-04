@@ -9,7 +9,8 @@ services:
       - mongo-data:/data/db
 
   minio:
-    image: minio/minio:latest
+    # Pin a concrete MinIO release; Dependabot keeps this up to date.
+    image: minio/minio:RELEASE.2025-10-15T17-29-55Z
     container_name: journal-archiver-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"

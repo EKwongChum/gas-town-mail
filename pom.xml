@@ -21,10 +21,11 @@
 
     <groupId>uk.ekwong</groupId>
     <artifactId>gas-town-mail</artifactId>
-    <version>1.0.0</version>
+    <version>0.1.0</version>
     <packaging>pom</packaging>
     <name>gas-town-mail</name>
     <description>Journal email archive platform: journal-archiver + mail-cleaner + mail-mcp-server applications</description>
+    <url>https://github.com/EKwongChum/gas-town-mail</url>
 
     <licenses>
         <license>
@@ -33,6 +34,27 @@
             <distribution>repo</distribution>
         </license>
     </licenses>
+
+    <developers>
+        <developer>
+            <id>EKwongChum</id>
+            <name>ekwongchum</name>
+            <email>ekwongchum@gmail.com</email>
+            <url>https://github.com/EKwongChum</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git@github.com:EKwongChum/gas-town-mail.git</connection>
+        <developerConnection>scm:git:git@github.com:EKwongChum/gas-town-mail.git</developerConnection>
+        <url>https://github.com/EKwongChum/gas-town-mail</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <issueManagement>
+        <system>GitHub Issues</system>
+        <url>https://github.com/EKwongChum/gas-town-mail/issues</url>
+    </issueManagement>
 
     <modules>
         <module>mail-common</module>
@@ -54,6 +76,10 @@
         <mcp-sdk.version>0.11.3</mcp-sdk.version>
         <!-- OpenAPI/Swagger UI for the REST API documentation -->
         <springdoc.version>2.8.17</springdoc.version>
+        <!-- code quality / release plugins -->
+        <jacoco.version>0.8.12</jacoco.version>
+        <spotless.version>2.44.5</spotless.version>
+        <cyclonedx.version>2.8.1</cyclonedx.version>
     </properties>
 
     <!--
@@ -110,6 +136,52 @@
     </dependencyManagement>
 
     <build>
+        <plugins>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.version}</version>
+                <configuration>
+                    <java>
+                        <googleJavaFormat>
+                            <version>1.22.0</version>
+                            <style>AOSP</style>
+                        </googleJavaFormat>
+                        <importOrder/>
+                        <removeUnusedImports/>
+                    </java>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>spotless-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
         <pluginManagement>
             <plugins>
                 <plugin>
@@ -133,6 +205,11 @@
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>${spring-boot.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.cyclonedx</groupId>
+                    <artifactId>cyclonedx-maven-plugin</artifactId>
+                    <version>${cyclonedx.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>

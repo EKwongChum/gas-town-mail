@@ -18,16 +18,14 @@ package uk.ekwong.mailcommon.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/**
- * Shared S3-compatible object storage settings used by both applications.
- */
+/** Shared S3-compatible object storage settings used by both applications. */
 @ConfigurationProperties(prefix = "app.storage.s3")
 public class S3Properties {
 
     private String endpoint = "http://localhost:9000";
     private String region = "us-east-1";
-    private String accessKey = "minioadmin";
-    private String secretKey = "minioadmin";
+    private String accessKey;
+    private String secretKey;
     private String bucket = "journal-emails";
     private boolean pathStyle = true;
     private boolean createBucketIfMissing = true;

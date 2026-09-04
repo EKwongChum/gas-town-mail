@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build and run tests
+        run: ./mvnw -B -ntp verify
+
+      - name: Collect jar artifacts
+        run: |
+          mkdir -p artifacts
+          cp journal-archiver/target/journal-archiver-*.jar artifacts/
+          cp mail-cleaner/target/mail-cleaner-*.jar artifacts/
+          cp mail-mcp-server/target/mail-mcp-server-*.jar artifacts/
+          cp mail-common/target/mail-common-*.jar artifacts/
+
+      - name: Generate CycloneDX SBOM
+        run: ./mvnw -B -ntp org.cyclonedx:cyclonedx-maven-plugin:2.8.1:makeAggregateBom
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/*.jar
+            target/bom.json
+          generate_release_notes: true
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push journal-archiver image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: journal-archiver/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/journal-archiver:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}/journal-archiver:latest
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            REVISION=${{ github.sha }}
+
+      - name: Build and push mail-cleaner image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: mail-cleaner/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/mail-cleaner:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}/mail-cleaner:latest
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            REVISION=${{ github.sha }}
+
+      - name: Build and push mail-mcp-server image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: mail-mcp-server/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/mail-mcp-server:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}/mail-mcp-server:latest
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            REVISION=${{ github.sha }}

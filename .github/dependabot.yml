@@ -1,0 +1,41 @@
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 10
+    groups:
+      spring-boot:
+        patterns:
+          - "org.springframework.boot:*"
+      aws-sdk:
+        patterns:
+          - "software.amazon.awssdk:*"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: docker
+    directory: "/journal-archiver"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: "/mail-cleaner"
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: "/mail-mcp-server"
+    schedule:
+      interval: weekly
