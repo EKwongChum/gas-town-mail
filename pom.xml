@@ -75,7 +75,7 @@
              standard Streamable HTTP MCP server. Requires Spring 6.2+ -->
         <mcp-sdk.version>0.11.3</mcp-sdk.version>
         <!-- OpenAPI/Swagger UI for the REST API documentation -->
-        <springdoc.version>2.8.17</springdoc.version>
+        <springdoc.version>3.1.0</springdoc.version>
         <!-- code quality / release plugins -->
         <jacoco.version>0.8.12</jacoco.version>
         <spotless.version>2.44.5</spotless.version>
