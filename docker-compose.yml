@@ -9,8 +9,9 @@ services:
       - mongo-data:/data/db
 
   minio:
-    # Pin a concrete MinIO release; Dependabot keeps this up to date.
-    image: minio/minio:RELEASE.2025-10-15T17-29-55Z
+    # MinIO publishes official container images on quay.io since late 2025;
+    # pin a concrete release instead of :latest.
+    image: quay.io/minio/minio:RELEASE.2025-10-15T17-29-55Z
     container_name: journal-archiver-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
