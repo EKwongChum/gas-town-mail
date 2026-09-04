@@ -43,7 +43,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         if: always()
         with:
           files: mail-common/target/site/jacoco/jacoco.xml,journal-archiver/target/site/jacoco/jacoco.xml,mail-cleaner/target/site/jacoco/jacoco.xml,mail-mcp-server/target/site/jacoco/jacoco.xml
