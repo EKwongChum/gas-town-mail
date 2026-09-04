@@ -29,7 +29,7 @@ RUN mvn -B -pl mail-mcp-server -am package -DskipTests \
     && cp mail-mcp-server/target/mail-mcp-server-*.jar /workspace/app.jar
 
 # ---- runtime stage ----
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:25-jre
 ARG VERSION
 ARG REVISION
 LABEL org.opencontainers.image.title="mail-mcp-server" \
