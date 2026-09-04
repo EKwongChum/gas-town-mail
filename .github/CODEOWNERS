@@ -1,0 +1,5 @@
+# Default code owners for the whole repository.
+* @EKwongChum
+
+# CI / release / repository automation.
+/.github/ @EKwongChum

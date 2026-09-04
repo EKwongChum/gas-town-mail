@@ -1,0 +1,48 @@
+name: Bug report
+description: Report a reproducible problem in gas-town-mail
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please provide enough detail for the
+        maintainers to reproduce the issue.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Which version/tag of the project are you using?
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the expected and the actual behaviour.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps, config, or SMTP/MCP client invocation that triggers the problem.
+      placeholder: |
+        1. Start the stack with `docker compose up -d`
+        2. Send this email ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, JDK version, Docker/Compose versions, and any modified configuration.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste any application or container logs. Remove sensitive values first.
+      render: shell

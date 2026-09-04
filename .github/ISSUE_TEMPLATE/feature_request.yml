@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest a feature or improvement for gas-town-mail
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Please explain the use case so the maintainers
+        can evaluate the proposal.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What do you want to achieve and why is it hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behaviour or API you would like to see.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Optional. Any workarounds or alternative designs.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Optional. Screenshots, links, or references.

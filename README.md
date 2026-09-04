@@ -1,8 +1,11 @@
 # Gas Town Mail（JDK 17 / Spring Boot 多模块工程）
 
-![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)
+[![License](https://img.shields.io/github/license/EKwongChum/gas-town-mail)](LICENSE)
 ![JDK](https://img.shields.io/badge/JDK-17-orange)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.13-brightgreen)
+[![CI](https://github.com/EKwongChum/gas-town-mail/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/EKwongChum/gas-town-mail)](CHANGELOG.md)
+
+> 中文文档 | [English README](README.en.md)
 
 ## 生成声明
 
@@ -121,7 +124,7 @@ export JAVA_HOME=/path/to/jdk17
 归档应用（HTTP 8080 / SMTP 2525）：
 
 ```bash
-java -jar journal-archiver/target/journal-archiver-1.0.0.jar
+java -jar journal-archiver/target/journal-archiver-0.1.0.jar
 # 或先安装共享模块到本地仓库，再用 spring-boot:run 调试：
 # ./mvnw install -DskipTests
 # ./mvnw -pl journal-archiver spring-boot:run
@@ -130,13 +133,13 @@ java -jar journal-archiver/target/journal-archiver-1.0.0.jar
 清洗应用（HTTP 8081 / 消费 mail_meta_topic）：
 
 ```bash
-java -jar mail-cleaner/target/mail-cleaner-1.0.0.jar
+java -jar mail-cleaner/target/mail-cleaner-0.1.0.jar
 ```
 
 MCP 查询应用（HTTP 8082 / MCP 端点 `/mcp`）：
 
 ```bash
-java -jar mail-mcp-server/target/mail-mcp-server-1.0.0.jar
+java -jar mail-mcp-server/target/mail-mcp-server-0.1.0.jar
 ```
 
 > MCP 工具的完整参数与调用示例见 [mail-mcp-server/README.md](mail-mcp-server/README.md)（接口文档）。
@@ -243,7 +246,7 @@ Stored email object s3://journal-emails/QWxpY2UgPGFsaWNlQGV4YW1wbGUuY29tPg==_PG9
 ## 健康检查
 
 `GET /actuator/health`：包含 MongoDB 健康（默认）和自定义的 SMTP 健康指示器
-（[SmtpHealthIndicator.java](src/main/java/com/example/journalarchiver/actuator/SmtpHealthIndicator.java)）。
+（[SmtpHealthIndicator.java](journal-archiver/src/main/java/uk/ekwong/journalarchiver/actuator/SmtpHealthIndicator.java)）。
 MongoDB 不可用时整体状态为 `DOWN`（HTTP 503），便于探活与告警。
 
 ## HTTP 重发接口
@@ -482,7 +485,7 @@ MCP 客户端（Claude Desktop / Cursor / 任意 MCP SDK）
 
 ```bash
 # 方式一：本地 java -jar（需先 mvn clean package）
-java -jar mail-mcp-server/target/mail-mcp-server-1.0.0.jar
+java -jar mail-mcp-server/target/mail-mcp-server-0.1.0.jar
 
 # 方式二：docker compose（与基础设施一起，自动连接容器内 Elasticsearch）
 docker compose --profile app up -d --build mail-mcp-server
@@ -539,8 +542,9 @@ docker run --rm \
 
 ## 贡献
 
-欢迎通过 [GitHub Issues](https://github.com/) 报告问题或提出功能建议，也欢迎提交
-Pull Request。提交前请确保在项目根目录运行 `./mvnw test` 通过全部测试。
+欢迎通过 [GitHub Issues](https://github.com/EKwongChum/gas-town-mail/issues) 报告问题或提出功能建议，
+也欢迎提交 [Pull Request](https://github.com/EKwongChum/gas-town-mail/pulls)。
+提交前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，并确保在项目根目录运行 `./mvnw test` 通过全部测试。
 
 ## 许可证
 

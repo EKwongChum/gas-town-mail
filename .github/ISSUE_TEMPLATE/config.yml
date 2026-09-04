@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security
+    url: https://github.com/EKwongChum/gas-town-mail/security/advisories
+    about: Please report security vulnerabilities through GitHub private vulnerability reporting.
