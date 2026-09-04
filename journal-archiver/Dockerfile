@@ -23,7 +23,7 @@ ARG VERSION=0.1.0
 ARG REVISION=unknown
 
 # ---- build stage ----
-FROM maven:3.9-eclipse-temurin-17 AS build
+FROM maven:3-eclipse-temurin-26 AS build
 WORKDIR /workspace
 COPY . .
 RUN mvn -B -pl journal-archiver -am package -DskipTests \
