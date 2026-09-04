@@ -16,21 +16,20 @@
 
 package uk.ekwong.journalarchiver.smtp;
 
-import uk.ekwong.journalarchiver.config.AppProperties;
-import uk.ekwong.journalarchiver.service.JournalProcessingService;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.net.InetAddress;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.subethamail.smtp.server.SMTPServer;
-
-import java.net.InetAddress;
-import java.util.Optional;
+import uk.ekwong.journalarchiver.config.AppProperties;
+import uk.ekwong.journalarchiver.service.JournalProcessingService;
 
 /**
- * Starts and stops the embedded SMTP server. The server binds to all
- * interfaces by default so it can receive journal reports from any source.
+ * Starts and stops the embedded SMTP server. The server binds to all interfaces by default so it
+ * can receive journal reports from any source.
  */
 @Component
 public class SmtpReceiver {
@@ -50,26 +49,35 @@ public class SmtpReceiver {
     public void start() throws Exception {
         AppProperties.Smtp smtp = properties.getSmtp();
 
-        Optional<InetAddress> bindAddress = isAnyAddress(smtp.getBindAddress())
-                ? Optional.empty() // empty means all interfaces
-                : Optional.of(InetAddress.getByName(smtp.getBindAddress()));
+        Optional<InetAddress> bindAddress =
+                isAnyAddress(smtp.getBindAddress())
+                        ? Optional.empty() // empty means all interfaces
+                        : Optional.of(InetAddress.getByName(smtp.getBindAddress()));
 
-        server = SMTPServer.port(smtp.getPort())
-                .hostName(smtp.getHostname())
-                .bindAddress(bindAddress)
-                .messageHandlerFactory(context ->
-                        new CapturingMessageHandler(context, processingService, smtp.getMaxMessageSize()))
-                .maxConnections(smtp.getMaxConnections())
-                .maxRecipients(smtp.getMaxRecipients())
-                .connectionTimeoutMs(smtp.getConnectionTimeoutSeconds() * 1000)
-                .requireTLS(smtp.isRequireTls())
-                .insertReceivedHeaders(!smtp.isDisableReceivedHeaders())
-                .maxMessageSize(smtp.getMaxMessageSize())
-                .build();
+        server =
+                SMTPServer.port(smtp.getPort())
+                        .hostName(smtp.getHostname())
+                        .bindAddress(bindAddress)
+                        .messageHandlerFactory(
+                                context ->
+                                        new CapturingMessageHandler(
+                                                context,
+                                                processingService,
+                                                smtp.getMaxMessageSize()))
+                        .maxConnections(smtp.getMaxConnections())
+                        .maxRecipients(smtp.getMaxRecipients())
+                        .connectionTimeoutMs(smtp.getConnectionTimeoutSeconds() * 1000)
+                        .requireTLS(smtp.isRequireTls())
+                        .insertReceivedHeaders(!smtp.isDisableReceivedHeaders())
+                        .maxMessageSize(smtp.getMaxMessageSize())
+                        .build();
 
         server.start();
-        log.info("SMTP server started on {}:{} (hostname={})",
-                smtp.getBindAddress(), smtp.getPort(), smtp.getHostname());
+        log.info(
+                "SMTP server started on {}:{} (hostname={})",
+                smtp.getBindAddress(),
+                smtp.getPort(),
+                smtp.getHostname());
     }
 
     public boolean isRunning() {

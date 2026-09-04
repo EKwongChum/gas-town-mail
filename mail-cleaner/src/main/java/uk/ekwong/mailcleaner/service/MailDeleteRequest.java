@@ -23,5 +23,4 @@ import java.util.List;
  *
  * @param ids archive ids (MongoDB id / object storage key) to delete
  */
-public record MailDeleteRequest(List<String> ids) {
-}
+public record MailDeleteRequest(List<String> ids) {}

@@ -16,12 +16,11 @@
 
 package uk.ekwong.mailcommon.mail;
 
-import jakarta.mail.internet.MimeMessage;
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import jakarta.mail.internet.MimeMessage;
+import java.time.Instant;
+import org.junit.jupiter.api.Test;
 
 class EmailDetailsExtractorTest {
 
@@ -29,7 +28,9 @@ class EmailDetailsExtractorTest {
 
     @Test
     void extractsAllBasicFields() throws Exception {
-        MimeMessage message = TestEmails.parse("""
+        MimeMessage message =
+                TestEmails.parse(
+                        """
                 Sender: sender@example.com
                 From: Alice <alice@example.com>
                 To: Bob <bob@example.com>, Dave <dave@example.com>
@@ -68,7 +69,9 @@ class EmailDetailsExtractorTest {
 
     @Test
     void fallsBackToFromWhenNoSenderHeader() throws Exception {
-        MimeMessage message = TestEmails.parse("""
+        MimeMessage message =
+                TestEmails.parse(
+                        """
                 From: alice@example.com
                 To: bob@example.com
                 Message-ID: <m-2@example.com>
@@ -84,7 +87,9 @@ class EmailDetailsExtractorTest {
 
     @Test
     void usesEnvelopeSenderWhenConfigured() throws Exception {
-        MimeMessage message = TestEmails.parse("""
+        MimeMessage message =
+                TestEmails.parse(
+                        """
                 From: alice@example.com
                 To: bob@example.com
                 Message-ID: <m-3@example.com>
@@ -92,7 +97,8 @@ class EmailDetailsExtractorTest {
                 body
                 """);
 
-        EmailDetails details = extractor.extract(message, "bounce-handler@relay.example", "envelope");
+        EmailDetails details =
+                extractor.extract(message, "bounce-handler@relay.example", "envelope");
 
         assertThat(details.sender()).isEqualTo("bounce-handler@relay.example");
         assertThat(details.from()).isEqualTo("alice@example.com");
@@ -100,7 +106,9 @@ class EmailDetailsExtractorTest {
 
     @Test
     void leavesMessageIdNullWhenMissing() throws Exception {
-        MimeMessage message = TestEmails.parse("""
+        MimeMessage message =
+                TestEmails.parse(
+                        """
                 From: alice@example.com
                 To: bob@example.com
 

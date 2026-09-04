@@ -16,11 +16,11 @@
 
 package uk.ekwong.mailmcpserver.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.PathItem;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class OpenApiConfigTest {
 

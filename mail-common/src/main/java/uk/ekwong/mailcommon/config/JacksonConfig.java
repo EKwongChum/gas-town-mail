@@ -23,9 +23,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Provides a Jackson ObjectMapper (this project has no web/json starter, so
- * Spring Boot does not auto-configure one). Instants are serialized as ISO-8601
- * strings in the RocketMQ notification payload.
+ * Provides a Jackson ObjectMapper (this project has no web/json starter, so Spring Boot does not
+ * auto-configure one). Instants are serialized as ISO-8601 strings in the RocketMQ notification
+ * payload.
  */
 @Configuration
 public class JacksonConfig {

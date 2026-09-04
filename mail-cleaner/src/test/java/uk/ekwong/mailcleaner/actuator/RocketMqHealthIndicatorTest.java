@@ -16,14 +16,14 @@
 
 package uk.ekwong.mailcleaner.actuator;
 
-import uk.ekwong.mailcleaner.consumer.MailMetaConsumer;
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.Status;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.actuate.health.Health;
+import org.springframework.boot.actuate.health.Status;
+import uk.ekwong.mailcleaner.consumer.MailMetaConsumer;
 
 class RocketMqHealthIndicatorTest {
 

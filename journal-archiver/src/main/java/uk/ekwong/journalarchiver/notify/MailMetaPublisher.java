@@ -19,16 +19,16 @@ package uk.ekwong.journalarchiver.notify;
 import uk.ekwong.journalarchiver.model.JournalEmailInfo;
 
 /**
- * Publishes a notification once an email is fully archived (metadata in
- * MongoDB and raw email in object storage).
+ * Publishes a notification once an email is fully archived (metadata in MongoDB and raw email in
+ * object storage).
  */
 public interface MailMetaPublisher {
 
     /**
      * Publishes a notification for an archived email.
      *
-     * @return {@code true} when the message was published successfully,
-     *         {@code false} otherwise (disabled or delivery failed)
+     * @return {@code true} when the message was published successfully, {@code false} otherwise
+     *     (disabled or delivery failed)
      */
     boolean publish(JournalEmailInfo info);
 }

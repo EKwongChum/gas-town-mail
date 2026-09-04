@@ -16,12 +16,11 @@
 
 package uk.ekwong.mailcommon.mail;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 class EmailIdGeneratorTest {
 
@@ -32,9 +31,11 @@ class EmailIdGeneratorTest {
 
         String id = EmailIdGenerator.generate(sender, messageId);
 
-        String expected = Base64.getEncoder().encodeToString(sender.getBytes(StandardCharsets.UTF_8))
-                + "_"
-                + Base64.getEncoder().encodeToString(messageId.getBytes(StandardCharsets.UTF_8));
+        String expected =
+                Base64.getEncoder().encodeToString(sender.getBytes(StandardCharsets.UTF_8))
+                        + "_"
+                        + Base64.getEncoder()
+                                .encodeToString(messageId.getBytes(StandardCharsets.UTF_8));
         assertThat(id).isEqualTo(expected);
         assertThat(id).doesNotContain("/").doesNotContain("+");
     }
@@ -42,8 +43,10 @@ class EmailIdGeneratorTest {
     @Test
     void treatsNullValuesAsEmpty() {
         String id = EmailIdGenerator.generate(null, null);
-        String expected = Base64.getEncoder().encodeToString(new byte[0]) + "_"
-                + Base64.getEncoder().encodeToString(new byte[0]);
+        String expected =
+                Base64.getEncoder().encodeToString(new byte[0])
+                        + "_"
+                        + Base64.getEncoder().encodeToString(new byte[0]);
         assertThat(id).isEqualTo(expected);
     }
 

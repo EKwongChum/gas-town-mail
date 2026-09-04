@@ -16,23 +16,21 @@
 
 package uk.ekwong.mailcleaner.consumer;
 
-import uk.ekwong.mailcleaner.config.CleanerProperties;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import uk.ekwong.mailcleaner.config.CleanerProperties;
 
 /**
- * Starts and stops the RocketMQ push consumer that subscribes to
- * {@code mail_meta_topic}. If the name server / broker is unreachable at
- * startup, the consumer is recreated and restarted periodically instead of
- * requiring an application restart.
+ * Starts and stops the RocketMQ push consumer that subscribes to {@code mail_meta_topic}. If the
+ * name server / broker is unreachable at startup, the consumer is recreated and restarted
+ * periodically instead of requiring an application restart.
  */
 @Component
 public class MailMetaConsumer {
@@ -41,11 +39,13 @@ public class MailMetaConsumer {
 
     private final CleanerProperties properties;
     private final MailMetaMessageListener listener;
-    private final ScheduledExecutorService startRetryExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread thread = new Thread(r, "rocketmq-consumer-start-retry");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private final ScheduledExecutorService startRetryExecutor =
+            Executors.newSingleThreadScheduledExecutor(
+                    r -> {
+                        Thread thread = new Thread(r, "rocketmq-consumer-start-retry");
+                        thread.setDaemon(true);
+                        return thread;
+                    });
     private volatile DefaultMQPushConsumer consumer;
     private volatile boolean stopping;
 
@@ -77,12 +77,18 @@ public class MailMetaConsumer {
             c.setConsumeThreadMax(4);
             c.start();
             this.consumer = c;
-            log.info("RocketMQ consumer '{}' started on topic '{}' (name server {})",
-                    mq.getConsumerGroup(), mq.getTopic(), mq.getNameServer());
+            log.info(
+                    "RocketMQ consumer '{}' started on topic '{}' (name server {})",
+                    mq.getConsumerGroup(),
+                    mq.getTopic(),
+                    mq.getNameServer());
         } catch (Exception e) {
             this.consumer = null;
-            log.warn("RocketMQ consumer failed to start (name server={}): {}; retrying in {} ms",
-                    mq.getNameServer(), e.getMessage(), mq.getStartRetryIntervalMs());
+            log.warn(
+                    "RocketMQ consumer failed to start (name server={}): {}; retrying in {} ms",
+                    mq.getNameServer(),
+                    e.getMessage(),
+                    mq.getStartRetryIntervalMs());
             scheduleRetry(mq);
         }
     }
@@ -91,7 +97,8 @@ public class MailMetaConsumer {
         if (stopping) {
             return;
         }
-        startRetryExecutor.schedule(this::startConsumer, mq.getStartRetryIntervalMs(), TimeUnit.MILLISECONDS);
+        startRetryExecutor.schedule(
+                this::startConsumer, mq.getStartRetryIntervalMs(), TimeUnit.MILLISECONDS);
     }
 
     @PreDestroy

@@ -19,19 +19,19 @@ package uk.ekwong.mailmcpserver.service;
 import java.time.Instant;
 
 /**
- * Filters for querying the Elasticsearch {@code mail_info} index.
- * All filters are optional and combined with AND.
+ * Filters for querying the Elasticsearch {@code mail_info} index. All filters are optional and
+ * combined with AND.
  *
- * @param keyword         free-text keyword matched against subject, sender, from, to and message id
- * @param sender          exact sender address
- * @param from            exact from address
- * @param to              exact to address
- * @param cc              exact cc address
- * @param messageId       exact Message-Id
- * @param receivedTimeGe  received time greater than or equal to (inclusive), ISO-8601
- * @param receivedTimeLt  received time less than (exclusive), ISO-8601
- * @param page            zero-based page number
- * @param size            page size, max 100
+ * @param keyword free-text keyword matched against subject, sender, from, to and message id
+ * @param sender exact sender address
+ * @param from exact from address
+ * @param to exact to address
+ * @param cc exact cc address
+ * @param messageId exact Message-Id
+ * @param receivedTimeGe received time greater than or equal to (inclusive), ISO-8601
+ * @param receivedTimeLt received time less than (exclusive), ISO-8601
+ * @param page zero-based page number
+ * @param size page size, max 100
  */
 public record MailSearchRequest(
         String keyword,
@@ -43,6 +43,4 @@ public record MailSearchRequest(
         Instant receivedTimeGe,
         Instant receivedTimeLt,
         int page,
-        int size
-) {
-}
+        int size) {}

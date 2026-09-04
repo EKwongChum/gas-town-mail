@@ -16,16 +16,11 @@
 
 package uk.ekwong.mailmcpserver.service;
 
+import java.util.List;
 import uk.ekwong.mailcommon.es.MailInfoDocument;
 
-import java.util.List;
-
 /**
- * Result of a mail_info search: the total number of matching documents
- * and the documents on the requested page.
+ * Result of a mail_info search: the total number of matching documents and the documents on the
+ * requested page.
  */
-public record SearchResult(
-        long total,
-        List<MailInfoDocument> documents
-) {
-}
+public record SearchResult(long total, List<MailInfoDocument> documents) {}

@@ -19,10 +19,9 @@ package uk.ekwong.mailcommon.mail;
 import java.time.Instant;
 
 /**
- * Payload published to RocketMQ after an email has been archived, so other
- * services know the email metadata (MongoDB) and the raw email (object
- * storage) are available. The {@code id} is both the MongoDB document id and
- * the object storage key.
+ * Payload published to RocketMQ after an email has been archived, so other services know the email
+ * metadata (MongoDB) and the raw email (object storage) are available. The {@code id} is both the
+ * MongoDB document id and the object storage key.
  */
 public record MailMetaMessage(
         String id,
@@ -37,6 +36,4 @@ public record MailMetaMessage(
         Instant receivedAt,
         Instant createdAt,
         Instant updatedAt,
-        long modificationCount
-) {
-}
+        long modificationCount) {}

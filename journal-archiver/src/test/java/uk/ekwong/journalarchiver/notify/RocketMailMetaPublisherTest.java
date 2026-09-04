@@ -16,21 +16,6 @@
 
 package uk.ekwong.journalarchiver.notify;
 
-import uk.ekwong.journalarchiver.config.AppProperties;
-import uk.ekwong.journalarchiver.model.JournalEmailInfo;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.apache.rocketmq.client.exception.MQClientException;
-import org.apache.rocketmq.client.producer.DefaultMQProducer;
-import org.apache.rocketmq.client.producer.SendResult;
-import org.apache.rocketmq.common.message.Message;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -40,17 +25,33 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import org.apache.rocketmq.client.exception.MQClientException;
+import org.apache.rocketmq.client.producer.DefaultMQProducer;
+import org.apache.rocketmq.client.producer.SendResult;
+import org.apache.rocketmq.common.message.Message;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import uk.ekwong.journalarchiver.config.AppProperties;
+import uk.ekwong.journalarchiver.model.JournalEmailInfo;
+
 class RocketMailMetaPublisherTest {
 
     private final DefaultMQProducer producer = mock(DefaultMQProducer.class);
-    private final ObjectMapper objectMapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    private final ObjectMapper objectMapper =
+            new ObjectMapper()
+                    .registerModule(new JavaTimeModule())
+                    .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     @Test
     void publishesJsonPayloadWithMongoIdAsMessageKey() throws Exception {
         AppProperties properties = new AppProperties();
-        RocketMailMetaPublisher publisher = new RocketMailMetaPublisher(producer, objectMapper, properties);
+        RocketMailMetaPublisher publisher =
+                new RocketMailMetaPublisher(producer, objectMapper, properties);
         JournalEmailInfo info = sampleInfo();
         when(producer.send(any(Message.class), anyLong())).thenReturn(mock(SendResult.class));
 
@@ -75,7 +76,8 @@ class RocketMailMetaPublisherTest {
     void publishesWithoutTagWhenTagIsBlank() throws Exception {
         AppProperties properties = new AppProperties();
         properties.getNotify().getRocketMq().setTag(" ");
-        RocketMailMetaPublisher publisher = new RocketMailMetaPublisher(producer, objectMapper, properties);
+        RocketMailMetaPublisher publisher =
+                new RocketMailMetaPublisher(producer, objectMapper, properties);
         when(producer.send(any(Message.class), anyLong())).thenReturn(mock(SendResult.class));
 
         assertThat(publisher.publish(sampleInfo())).isTrue();
@@ -91,7 +93,8 @@ class RocketMailMetaPublisherTest {
     void skipsPublishWhenDisabled() {
         AppProperties properties = new AppProperties();
         properties.getNotify().getRocketMq().setEnabled(false);
-        RocketMailMetaPublisher publisher = new RocketMailMetaPublisher(producer, objectMapper, properties);
+        RocketMailMetaPublisher publisher =
+                new RocketMailMetaPublisher(producer, objectMapper, properties);
 
         assertThat(publisher.publish(sampleInfo())).isFalse();
         verifyNoInteractions(producer);
@@ -100,7 +103,8 @@ class RocketMailMetaPublisherTest {
     @Test
     void returnsFalseWhenSendFails() throws Exception {
         AppProperties properties = new AppProperties();
-        RocketMailMetaPublisher publisher = new RocketMailMetaPublisher(producer, objectMapper, properties);
+        RocketMailMetaPublisher publisher =
+                new RocketMailMetaPublisher(producer, objectMapper, properties);
         when(producer.send(any(Message.class), anyLong()))
                 .thenThrow(new MQClientException("name server unreachable", null));
 

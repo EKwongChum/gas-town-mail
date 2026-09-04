@@ -16,11 +16,10 @@
 
 package uk.ekwong.journalarchiver.repository;
 
-import uk.ekwong.journalarchiver.model.JournalEmailInfo;
-import org.springframework.data.mongodb.repository.MongoRepository;
-
 import java.time.Instant;
 import java.util.List;
+import org.springframework.data.mongodb.repository.MongoRepository;
+import uk.ekwong.journalarchiver.model.JournalEmailInfo;
 
 public interface JournalEmailInfoRepository extends MongoRepository<JournalEmailInfo, String> {
 
@@ -28,5 +27,6 @@ public interface JournalEmailInfoRepository extends MongoRepository<JournalEmail
 
     List<JournalEmailInfo> findByCreatedAtLessThan(Instant timeLt);
 
-    List<JournalEmailInfo> findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(Instant timeGe, Instant timeLt);
+    List<JournalEmailInfo> findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+            Instant timeGe, Instant timeLt);
 }

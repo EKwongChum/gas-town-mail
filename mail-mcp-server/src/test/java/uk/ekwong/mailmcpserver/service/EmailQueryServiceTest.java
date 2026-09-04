@@ -16,24 +16,23 @@
 
 package uk.ekwong.mailmcpserver.service;
 
-import uk.ekwong.mailcommon.es.MailInfoDocument;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.data.elasticsearch.client.elc.NativeQuery;
-import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
-import org.springframework.data.elasticsearch.core.SearchHit;
-import org.springframework.data.elasticsearch.core.SearchHits;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.elasticsearch.client.elc.NativeQuery;
+import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.data.elasticsearch.core.SearchHit;
+import org.springframework.data.elasticsearch.core.SearchHits;
+import uk.ekwong.mailcommon.es.MailInfoDocument;
 
 class EmailQueryServiceTest {
 
@@ -64,13 +63,25 @@ class EmailQueryServiceTest {
         SearchHits<MailInfoDocument> hits = mock(SearchHits.class);
         when(hits.getSearchHits()).thenReturn(List.of(hit));
 
-        when(operations.count(any(org.springframework.data.elasticsearch.core.query.Query.class),
-                eq(MailInfoDocument.class))).thenReturn(42L);
-        when(operations.search(any(NativeQuery.class), eq(MailInfoDocument.class))).thenReturn(hits);
+        when(operations.count(
+                        any(org.springframework.data.elasticsearch.core.query.Query.class),
+                        eq(MailInfoDocument.class)))
+                .thenReturn(42L);
+        when(operations.search(any(NativeQuery.class), eq(MailInfoDocument.class)))
+                .thenReturn(hits);
 
-        MailSearchRequest request = new MailSearchRequest(
-                "report", "sender@example.com", null, null, null, null,
-                Instant.parse("2026-08-01T00:00:00Z"), null, 0, 20);
+        MailSearchRequest request =
+                new MailSearchRequest(
+                        "report",
+                        "sender@example.com",
+                        null,
+                        null,
+                        null,
+                        null,
+                        Instant.parse("2026-08-01T00:00:00Z"),
+                        null,
+                        0,
+                        20);
 
         SearchResult result = service.search(request);
 
@@ -89,25 +100,33 @@ class EmailQueryServiceTest {
         @SuppressWarnings("unchecked")
         SearchHits<MailInfoDocument> hits = mock(SearchHits.class);
         when(hits.getSearchHits()).thenReturn(List.of());
-        when(operations.count(any(org.springframework.data.elasticsearch.core.query.Query.class),
-                eq(MailInfoDocument.class))).thenReturn(0L);
-        when(operations.search(any(NativeQuery.class), eq(MailInfoDocument.class))).thenReturn(hits);
+        when(operations.count(
+                        any(org.springframework.data.elasticsearch.core.query.Query.class),
+                        eq(MailInfoDocument.class)))
+                .thenReturn(0L);
+        when(operations.search(any(NativeQuery.class), eq(MailInfoDocument.class)))
+                .thenReturn(hits);
 
-        service.search(new MailSearchRequest(null, null, null, null, null, null,
-                null, null, 1, 10_000));
+        service.search(
+                new MailSearchRequest(null, null, null, null, null, null, null, null, 1, 10_000));
 
         ArgumentCaptor<NativeQuery> queryCaptor = ArgumentCaptor.forClass(NativeQuery.class);
         verify(operations).search(queryCaptor.capture(), eq(MailInfoDocument.class));
-        assertThat(queryCaptor.getValue().getPageable().getPageSize()).isEqualTo(EmailQueryService.MAX_PAGE_SIZE);
+        assertThat(queryCaptor.getValue().getPageable().getPageSize())
+                .isEqualTo(EmailQueryService.MAX_PAGE_SIZE);
     }
 
     @Test
     void countReturnsDocumentCount() {
-        when(operations.count(any(org.springframework.data.elasticsearch.core.query.Query.class),
-                eq(MailInfoDocument.class))).thenReturn(7L);
+        when(operations.count(
+                        any(org.springframework.data.elasticsearch.core.query.Query.class),
+                        eq(MailInfoDocument.class)))
+                .thenReturn(7L);
 
-        long count = service.count(new MailSearchRequest("report", null, null, null, null,
-                null, null, null, 0, 20));
+        long count =
+                service.count(
+                        new MailSearchRequest(
+                                "report", null, null, null, null, null, null, null, 0, 20));
 
         assertThat(count).isEqualTo(7L);
     }

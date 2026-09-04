@@ -16,15 +16,15 @@
 
 package uk.ekwong.journalarchiver.controller;
 
-import uk.ekwong.journalarchiver.model.ResendRequest;
-import uk.ekwong.journalarchiver.model.ResendResponse;
-import uk.ekwong.journalarchiver.service.ResendService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uk.ekwong.journalarchiver.model.ResendRequest;
+import uk.ekwong.journalarchiver.model.ResendResponse;
+import uk.ekwong.journalarchiver.service.ResendService;
 
 /**
  * HTTP interface to re-publish archived email notifications.
@@ -42,7 +42,9 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/journal-emails")
-@Tag(name = "Notification resend", description = "Re-publish mail_meta_topic notifications for archived emails")
+@Tag(
+        name = "Notification resend",
+        description = "Re-publish mail_meta_topic notifications for archived emails")
 public class ResendController {
 
     private final ResendService resendService;
@@ -52,10 +54,12 @@ public class ResendController {
     }
 
     @PostMapping("/resend")
-    @Operation(summary = "Resend archive notifications",
-            description = "Re-publishes mail_meta_topic notifications for archived emails. "
-                    + "Provide ids to resend specific documents (takes precedence), or a "
-                    + "[timeGe, timeLt) range to resend documents created in that interval.")
+    @Operation(
+            summary = "Resend archive notifications",
+            description =
+                    "Re-publishes mail_meta_topic notifications for archived emails. "
+                            + "Provide ids to resend specific documents (takes precedence), or a "
+                            + "[timeGe, timeLt) range to resend documents created in that interval.")
     public ResendResponse resend(@RequestBody ResendRequest request) {
         return resendService.resend(request);
     }

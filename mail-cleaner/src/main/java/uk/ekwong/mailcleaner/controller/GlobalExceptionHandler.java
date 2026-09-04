@@ -25,8 +25,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * Uniform error responses: {@code 400} for bad requests and {@code 500} with a
- * generic message for unexpected failures (details go to the logs only).
+ * Uniform error responses: {@code 400} for bad requests and {@code 500} with a generic message for
+ * unexpected failures (details go to the logs only).
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -51,6 +51,5 @@ public class GlobalExceptionHandler {
                 .body(new ApiError("Internal server error"));
     }
 
-    public record ApiError(String error) {
-    }
+    public record ApiError(String error) {}
 }

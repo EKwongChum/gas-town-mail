@@ -16,12 +16,7 @@
 
 package uk.ekwong.journalarchiver.service;
 
-import uk.ekwong.journalarchiver.config.AppProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
-
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.file.Files;
@@ -31,10 +26,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+import uk.ekwong.journalarchiver.config.AppProperties;
 
 /**
- * Persists emails that could not be archived after all retries, so the raw
- * message bytes are not lost and can be replayed manually.
+ * Persists emails that could not be archived after all retries, so the raw message bytes are not
+ * lost and can be replayed manually.
  */
 @Component
 public class DeadLetterStore {
@@ -50,18 +49,22 @@ public class DeadLetterStore {
     }
 
     /**
-     * Writes the raw email as an {@code .eml} file plus a sidecar JSON file
-     * with the receive context and the failure reason.
+     * Writes the raw email as an {@code .eml} file plus a sidecar JSON file with the receive
+     * context and the failure reason.
      */
-    public void save(byte[] rawMessage,
-                     String envelopeSender,
-                     List<String> recipients,
-                     SocketAddress clientAddress,
-                     Throwable error) {
+    public void save(
+            byte[] rawMessage,
+            String envelopeSender,
+            List<String> recipients,
+            SocketAddress clientAddress,
+            Throwable error) {
         try {
             Files.createDirectories(directory);
-            String baseName = "email-" + Instant.now().toString()
-                    .replace(":", "-").replace(".", "-") + "-" + UUID.randomUUID();
+            String baseName =
+                    "email-"
+                            + Instant.now().toString().replace(":", "-").replace(".", "-")
+                            + "-"
+                            + UUID.randomUUID();
             Path emlFile = directory.resolve(baseName + ".eml");
             Files.write(emlFile, rawMessage);
 
@@ -72,11 +75,14 @@ public class DeadLetterStore {
             context.put("clientAddress", clientAddress == null ? null : clientAddress.toString());
             context.put("error", error == null ? null : error.toString());
             Path contextFile = directory.resolve(baseName + ".json");
-            Files.writeString(contextFile, objectMapper.writerWithDefaultPrettyPrinter()
-                    .writeValueAsString(context));
+            Files.writeString(
+                    contextFile,
+                    objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(context));
 
-            log.error("Email could not be archived after all retries; saved to {} (context: {})",
-                    emlFile, contextFile);
+            log.error(
+                    "Email could not be archived after all retries; saved to {} (context: {})",
+                    emlFile,
+                    contextFile);
         } catch (IOException | RuntimeException e) {
             log.error("Failed to persist dead-letter email", e);
         }

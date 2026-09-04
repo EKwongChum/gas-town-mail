@@ -16,20 +16,6 @@
 
 package uk.ekwong.journalarchiver.controller;
 
-import uk.ekwong.journalarchiver.model.ResendRequest;
-import uk.ekwong.journalarchiver.model.ResendResponse;
-import uk.ekwong.journalarchiver.service.ResendService;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-
-import java.time.Instant;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -38,23 +24,35 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import uk.ekwong.journalarchiver.model.ResendRequest;
+import uk.ekwong.journalarchiver.model.ResendResponse;
+import uk.ekwong.journalarchiver.service.ResendService;
+
 @WebMvcTest(ResendController.class)
 class ResendControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+    @Autowired private MockMvc mockMvc;
 
-    @MockBean
-    private ResendService resendService;
+    @MockBean private ResendService resendService;
 
     @Test
     void resendsProvidedIds() throws Exception {
         when(resendService.resend(any(ResendRequest.class)))
                 .thenReturn(new ResendResponse(1, 1, 0, List.of("id-1"), List.of()));
 
-        mockMvc.perform(post("/api/journal-emails/resend")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"ids\":[\"id-1\"]}"))
+        mockMvc.perform(
+                        post("/api/journal-emails/resend")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"ids\":[\"id-1\"]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(1))
                 .andExpect(jsonPath("$.succeeded").value(1))
@@ -72,9 +70,11 @@ class ResendControllerTest {
         when(resendService.resend(any(ResendRequest.class)))
                 .thenReturn(new ResendResponse(2, 2, 0, List.of("id-a", "id-b"), List.of()));
 
-        mockMvc.perform(post("/api/journal-emails/resend")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"timeGe\":\"2026-08-16T00:00:00Z\",\"timeLt\":\"2026-08-17T00:00:00Z\"}"))
+        mockMvc.perform(
+                        post("/api/journal-emails/resend")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"timeGe\":\"2026-08-16T00:00:00Z\",\"timeLt\":\"2026-08-17T00:00:00Z\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(2));
 
@@ -88,20 +88,24 @@ class ResendControllerTest {
     @Test
     void returnsBadRequestWhenServiceRejects() throws Exception {
         when(resendService.resend(any(ResendRequest.class)))
-                .thenThrow(new IllegalArgumentException("At least one of 'ids', 'timeGe' or 'timeLt' must be provided"));
+                .thenThrow(
+                        new IllegalArgumentException(
+                                "At least one of 'ids', 'timeGe' or 'timeLt' must be provided"));
 
-        mockMvc.perform(post("/api/journal-emails/resend")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+        mockMvc.perform(
+                        post("/api/journal-emails/resend")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").isNotEmpty());
     }
 
     @Test
     void returnsBadRequestForMalformedJson() throws Exception {
-        mockMvc.perform(post("/api/journal-emails/resend")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{not-valid-json"))
+        mockMvc.perform(
+                        post("/api/journal-emails/resend")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{not-valid-json"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Malformed request body"));
     }

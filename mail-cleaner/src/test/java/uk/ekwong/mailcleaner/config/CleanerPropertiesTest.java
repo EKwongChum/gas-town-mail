@@ -16,14 +16,13 @@
 
 package uk.ekwong.mailcleaner.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
-
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class CleanerPropertiesTest {
 
@@ -46,9 +45,11 @@ class CleanerPropertiesTest {
 
     @Test
     void bindsKebabCaseNameServerProperty() {
-        CleanerProperties properties = bind(Map.of(
-                "app.rocketmq.name-server", "rocketmq-namesrv:9876",
-                "app.rocketmq.start-retry-interval-ms", "5000"));
+        CleanerProperties properties =
+                bind(
+                        Map.of(
+                                "app.rocketmq.name-server", "rocketmq-namesrv:9876",
+                                "app.rocketmq.start-retry-interval-ms", "5000"));
 
         assertThat(properties.getRocketmq().getNameServer()).isEqualTo("rocketmq-namesrv:9876");
         assertThat(properties.getRocketmq().getStartRetryIntervalMs()).isEqualTo(5000);

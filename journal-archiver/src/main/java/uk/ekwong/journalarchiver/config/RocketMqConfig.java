@@ -23,10 +23,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Creates the RocketMQ producer. The producer is configured here but started
- * lazily before the first send (see {@code RocketMailMetaPublisher}), so a
- * temporarily unreachable name server never leaves the producer in a
- * START_FAILED state that would require an application restart.
+ * Creates the RocketMQ producer. The producer is configured here but started lazily before the
+ * first send (see {@code RocketMailMetaPublisher}), so a temporarily unreachable name server never
+ * leaves the producer in a START_FAILED state that would require an application restart.
  */
 @Configuration
 public class RocketMqConfig {
@@ -40,8 +39,10 @@ public class RocketMqConfig {
         producer.setNamesrvAddr(mq.getNameServer());
         producer.setSendMsgTimeout((int) mq.getSendTimeoutMs());
         producer.setRetryTimesWhenSendFailed(mq.getRetryTimesWhenSendFailed());
-        log.info("RocketMQ producer '{}' initialized on name server {}",
-                mq.getProducerGroup(), mq.getNameServer());
+        log.info(
+                "RocketMQ producer '{}' initialized on name server {}",
+                mq.getProducerGroup(),
+                mq.getNameServer());
         return producer;
     }
 }

@@ -25,10 +25,6 @@ import jakarta.mail.Part;
 import jakarta.mail.internet.MailDateFormat;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeUtility;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
-
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -36,24 +32,27 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 /**
- * Extracts email details (sender, from, to, cc, Message-Id, received time,
- * subject, content type and attachment names) from a MIME message.
+ * Extracts email details (sender, from, to, cc, Message-Id, received time, subject, content type
+ * and attachment names) from a MIME message.
  */
 @Component
 public class EmailDetailsExtractor {
 
     private static final Logger log = LoggerFactory.getLogger(EmailDetailsExtractor.class);
 
-    public EmailDetails extract(MimeMessage message, String envelopeSender) throws MessagingException, IOException {
+    public EmailDetails extract(MimeMessage message, String envelopeSender)
+            throws MessagingException, IOException {
         return extract(message, envelopeSender, "header");
     }
 
     /**
-     * @param senderResolution how the "sender" field is resolved:
-     *                         {@code header} (Sender header, fallback From),
-     *                         {@code envelope} (SMTP MAIL FROM) or {@code from}
+     * @param senderResolution how the "sender" field is resolved: {@code header} (Sender header,
+     *     fallback From), {@code envelope} (SMTP MAIL FROM) or {@code from}
      */
     public EmailDetails extract(MimeMessage message, String envelopeSender, String senderResolution)
             throws MessagingException, IOException {
@@ -66,10 +65,20 @@ public class EmailDetailsExtractor {
         String subject = decodeSubject(message);
         String contentType = contentType(message);
         List<String> attachmentNames = collectAttachmentNames(message);
-        return new EmailDetails(sender, from, to, cc, messageId, receivedTime, subject, contentType, attachmentNames);
+        return new EmailDetails(
+                sender,
+                from,
+                to,
+                cc,
+                messageId,
+                receivedTime,
+                subject,
+                contentType,
+                attachmentNames);
     }
 
-    private String resolveSender(MimeMessage message, String envelopeSender, String from, String senderResolution)
+    private String resolveSender(
+            MimeMessage message, String envelopeSender, String from, String senderResolution)
             throws MessagingException {
         String senderHeader = firstHeader(message, "Sender");
         return switch (senderResolution == null ? "header" : senderResolution.toLowerCase()) {
@@ -92,9 +101,7 @@ public class EmailDetailsExtractor {
         if (addresses == null || addresses.length == 0) {
             return null;
         }
-        return Arrays.stream(addresses)
-                .map(Address::toString)
-                .collect(Collectors.joining(", "));
+        return Arrays.stream(addresses).map(Address::toString).collect(Collectors.joining(", "));
     }
 
     private String addressToString(Address address) {
@@ -133,8 +140,8 @@ public class EmailDetailsExtractor {
     }
 
     /**
-     * Collects the file names of all attachments. Parts without a file name are
-     * ignored; nested multipart parts are walked recursively.
+     * Collects the file names of all attachments. Parts without a file name are ignored; nested
+     * multipart parts are walked recursively.
      */
     private List<String> collectAttachmentNames(Part part) throws MessagingException, IOException {
         List<String> names = new ArrayList<>();

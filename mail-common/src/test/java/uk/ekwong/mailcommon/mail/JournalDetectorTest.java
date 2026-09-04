@@ -16,10 +16,10 @@
 
 package uk.ekwong.mailcommon.mail;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class JournalDetectorTest {
 

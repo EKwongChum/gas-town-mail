@@ -16,15 +16,15 @@
 
 package uk.ekwong.mailmcpserver.config;
 
-import uk.ekwong.mailmcpserver.mcp.MailQueryTools;
-import uk.ekwong.mailmcpserver.service.EmailQueryService;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.server.McpSyncServer;
 import io.modelcontextprotocol.server.transport.WebMvcStreamableServerTransportProvider;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
+import uk.ekwong.mailmcpserver.mcp.MailQueryTools;
+import uk.ekwong.mailmcpserver.service.EmailQueryService;
 
 class McpServerConfigTest {
 

@@ -16,24 +16,23 @@
 
 package uk.ekwong.journalarchiver.smtp;
 
-import uk.ekwong.journalarchiver.service.JournalProcessingService;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.subethamail.smtp.MessageContext;
-import org.subethamail.smtp.RejectException;
-
-import java.io.ByteArrayInputStream;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+
+import java.io.ByteArrayInputStream;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.subethamail.smtp.MessageContext;
+import org.subethamail.smtp.RejectException;
+import uk.ekwong.journalarchiver.service.JournalProcessingService;
 
 class CapturingMessageHandlerTest {
 
@@ -56,13 +55,15 @@ class CapturingMessageHandlerTest {
 
         String raw = "From: a@example.com\r\nSubject: test\r\n\r\nbody";
 
-        assertThat(handler.data(new ByteArrayInputStream(raw.getBytes(StandardCharsets.UTF_8)))).isNull();
+        assertThat(handler.data(new ByteArrayInputStream(raw.getBytes(StandardCharsets.UTF_8))))
+                .isNull();
 
-        verify(processingService).process(
-                raw.getBytes(StandardCharsets.UTF_8),
-                "sender@example.com",
-                List.of("to@example.com", "cc@example.com"),
-                clientAddress);
+        verify(processingService)
+                .process(
+                        raw.getBytes(StandardCharsets.UTF_8),
+                        "sender@example.com",
+                        List.of("to@example.com", "cc@example.com"),
+                        clientAddress);
     }
 
     @Test
@@ -72,10 +73,13 @@ class CapturingMessageHandlerTest {
         handler.from("sender@example.com");
         handler.recipient("to@example.com");
 
-        assertThatThrownBy(() -> handler.data(
-                new ByteArrayInputStream("0123456789".getBytes(StandardCharsets.UTF_8))))
-                .isInstanceOfSatisfying(RejectException.class, e ->
-                        assertThat(e.getCode()).isEqualTo(552));
+        assertThatThrownBy(
+                        () ->
+                                handler.data(
+                                        new ByteArrayInputStream(
+                                                "0123456789".getBytes(StandardCharsets.UTF_8))))
+                .isInstanceOfSatisfying(
+                        RejectException.class, e -> assertThat(e.getCode()).isEqualTo(552));
 
         verifyNoInteractions(processingService);
     }

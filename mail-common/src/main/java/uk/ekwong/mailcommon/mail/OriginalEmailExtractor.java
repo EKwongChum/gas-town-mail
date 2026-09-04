@@ -22,46 +22,48 @@ import jakarta.mail.Multipart;
 import jakarta.mail.Part;
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Optional;
 import java.util.Properties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 /**
- * Extracts the original email from a journal report. If the journal report
- * embeds the original message as a {@code message/rfc822} body part, the raw
- * bytes of that part are used; otherwise the received message itself is
- * treated as the original email.
+ * Extracts the original email from a journal report. If the journal report embeds the original
+ * message as a {@code message/rfc822} body part, the raw bytes of that part are used; otherwise the
+ * received message itself is treated as the original email.
  */
 @Component
 public class OriginalEmailExtractor {
 
     private static final Logger log = LoggerFactory.getLogger(OriginalEmailExtractor.class);
 
-    public OriginalEmail extractOriginal(MimeMessage received, byte[] receivedRaw, boolean extractEmbedded)
+    public OriginalEmail extractOriginal(
+            MimeMessage received, byte[] receivedRaw, boolean extractEmbedded)
             throws MessagingException, IOException {
         if (extractEmbedded) {
             Optional<byte[]> embedded = findFirstEmbeddedOriginal(received);
             if (embedded.isPresent()) {
                 byte[] raw = embedded.get();
-                MimeMessage original = new MimeMessage(
-                        Session.getInstance(new Properties()),
-                        new ByteArrayInputStream(raw));
+                MimeMessage original =
+                        new MimeMessage(
+                                Session.getInstance(new Properties()),
+                                new ByteArrayInputStream(raw));
                 log.info("Extracted embedded original email ({} bytes)", raw.length);
                 return new OriginalEmail(raw, original);
             }
-            log.info("No embedded message/rfc822 part found; treating the received message as the original email");
+            log.info(
+                    "No embedded message/rfc822 part found; treating the received message as the original email");
         }
         return new OriginalEmail(receivedRaw, received);
     }
 
-    private Optional<byte[]> findFirstEmbeddedOriginal(Part part) throws MessagingException, IOException {
+    private Optional<byte[]> findFirstEmbeddedOriginal(Part part)
+            throws MessagingException, IOException {
         if (part.isMimeType("message/rfc822")) {
             try (InputStream in = part.getInputStream()) {
                 return Optional.of(readAll(in));

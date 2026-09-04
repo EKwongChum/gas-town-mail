@@ -20,8 +20,8 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * Basic information extracted from an email: header fields plus the MIME
- * content type and the names of all attachments.
+ * Basic information extracted from an email: header fields plus the MIME content type and the names
+ * of all attachments.
  */
 public record EmailDetails(
         String sender,
@@ -32,6 +32,4 @@ public record EmailDetails(
         Instant receivedTime,
         String subject,
         String contentType,
-        List<String> attachmentNames
-) {
-}
+        List<String> attachmentNames) {}

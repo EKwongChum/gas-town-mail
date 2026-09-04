@@ -16,19 +16,6 @@
 
 package uk.ekwong.journalarchiver.service;
 
-import uk.ekwong.journalarchiver.config.AppProperties;
-import uk.ekwong.journalarchiver.model.JournalEmailInfo;
-import uk.ekwong.journalarchiver.model.ResendRequest;
-import uk.ekwong.journalarchiver.model.ResendResponse;
-import uk.ekwong.journalarchiver.notify.MailMetaPublisher;
-import uk.ekwong.journalarchiver.repository.JournalEmailInfoRepository;
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.Executor;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -38,12 +25,25 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.Executor;
+import org.junit.jupiter.api.Test;
+import uk.ekwong.journalarchiver.config.AppProperties;
+import uk.ekwong.journalarchiver.model.JournalEmailInfo;
+import uk.ekwong.journalarchiver.model.ResendRequest;
+import uk.ekwong.journalarchiver.model.ResendResponse;
+import uk.ekwong.journalarchiver.notify.MailMetaPublisher;
+import uk.ekwong.journalarchiver.repository.JournalEmailInfoRepository;
+
 class ResendServiceTest {
 
     private final JournalEmailInfoRepository repository = mock(JournalEmailInfoRepository.class);
     private final MailMetaPublisher publisher = mock(MailMetaPublisher.class);
     private final Executor directExecutor = Runnable::run;
-    private final ResendService service = new ResendService(repository, publisher, directExecutor, new AppProperties());
+    private final ResendService service =
+            new ResendService(repository, publisher, directExecutor, new AppProperties());
 
     private final Instant timeGe = Instant.parse("2026-08-16T00:00:00Z");
     private final Instant timeLt = Instant.parse("2026-08-17T00:00:00Z");
@@ -63,7 +63,8 @@ class ResendServiceTest {
         verify(publisher).publish(info);
         verify(repository, never()).findByCreatedAtGreaterThanEqual(any());
         verify(repository, never()).findByCreatedAtLessThan(any());
-        verify(repository, never()).findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(any(), any());
+        verify(repository, never())
+                .findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(any(), any());
     }
 
     @Test
@@ -141,7 +142,8 @@ class ResendServiceTest {
         verify(repository).findById("id-1");
         verify(repository, never()).findByCreatedAtGreaterThanEqual(any());
         verify(repository, never()).findByCreatedAtLessThan(any());
-        verify(repository, never()).findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(any(), any());
+        verify(repository, never())
+                .findByCreatedAtGreaterThanEqualAndCreatedAtLessThan(any(), any());
     }
 
     @Test
@@ -155,9 +157,11 @@ class ResendServiceTest {
     void rejectsWhenTooManyIds() {
         AppProperties properties = new AppProperties();
         properties.getResend().setMaxIds(2);
-        ResendService limited = new ResendService(repository, publisher, directExecutor, properties);
+        ResendService limited =
+                new ResendService(repository, publisher, directExecutor, properties);
 
-        assertThatThrownBy(() -> limited.resend(new ResendRequest(null, null, List.of("a", "b", "c"))))
+        assertThatThrownBy(
+                        () -> limited.resend(new ResendRequest(null, null, List.of("a", "b", "c"))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Too many ids");
     }

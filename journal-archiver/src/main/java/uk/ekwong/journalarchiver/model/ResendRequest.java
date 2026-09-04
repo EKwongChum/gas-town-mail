@@ -22,17 +22,12 @@ import java.util.List;
 /**
  * Request body for the notification resend endpoint.
  *
- * <p>When {@code ids} is provided it takes precedence and the matching
- * documents are resent directly. Otherwise the documents whose creation time
- * falls into {@code [timeGe, timeLt)} are looked up and resent.
+ * <p>When {@code ids} is provided it takes precedence and the matching documents are resent
+ * directly. Otherwise the documents whose creation time falls into {@code [timeGe, timeLt)} are
+ * looked up and resent.
  *
  * @param timeGe data creation time greater than or equal to this value (optional)
  * @param timeLt data creation time less than this value (optional)
- * @param ids    MongoDB document ids to resend (optional)
+ * @param ids MongoDB document ids to resend (optional)
  */
-public record ResendRequest(
-        Instant timeGe,
-        Instant timeLt,
-        List<String> ids
-) {
-}
+public record ResendRequest(Instant timeGe, Instant timeLt, List<String> ids) {}

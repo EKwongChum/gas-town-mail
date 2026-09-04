@@ -16,14 +16,12 @@
 
 package uk.ekwong.journalarchiver.actuator;
 
-import uk.ekwong.journalarchiver.smtp.SmtpReceiver;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.stereotype.Component;
+import uk.ekwong.journalarchiver.smtp.SmtpReceiver;
 
-/**
- * Reports whether the embedded SMTP server is accepting connections.
- */
+/** Reports whether the embedded SMTP server is accepting connections. */
 @Component
 public class SmtpHealthIndicator implements HealthIndicator {
 

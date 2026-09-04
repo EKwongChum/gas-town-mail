@@ -16,18 +16,17 @@
 
 package uk.ekwong.mailcleaner.consumer;
 
-import uk.ekwong.mailcleaner.service.MailCleaningService;
-import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
-import org.apache.rocketmq.common.message.MessageExt;
-import org.junit.jupiter.api.Test;
-
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
+import org.apache.rocketmq.common.message.MessageExt;
+import org.junit.jupiter.api.Test;
+import uk.ekwong.mailcleaner.service.MailCleaningService;
 
 class MailMetaMessageListenerTest {
 
@@ -54,7 +53,8 @@ class MailMetaMessageListenerTest {
         message.setKeys("id-2");
         message.setBody("{}".getBytes(StandardCharsets.UTF_8));
         doThrow(new MailCleaningService.MailCleanException("boom", null))
-                .when(cleaningService).clean("{}", "id-2");
+                .when(cleaningService)
+                .clean("{}", "id-2");
 
         ConsumeConcurrentlyStatus status = listener.consumeMessage(List.of(message), null);
 
@@ -66,7 +66,8 @@ class MailMetaMessageListenerTest {
         MessageExt ok = message("id-ok");
         MessageExt bad = message("id-bad");
         doThrow(new MailCleaningService.MailCleanException("boom", null))
-                .when(cleaningService).clean("{}", "id-bad");
+                .when(cleaningService)
+                .clean("{}", "id-bad");
 
         ConsumeConcurrentlyStatus status = listener.consumeMessage(List.of(ok, bad), null);
 

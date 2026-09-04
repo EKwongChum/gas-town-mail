@@ -16,12 +16,11 @@
 
 package uk.ekwong.mailcommon.mail;
 
-import jakarta.mail.internet.MimeMessage;
-import org.junit.jupiter.api.Test;
-
-import java.nio.charset.StandardCharsets;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import jakarta.mail.internet.MimeMessage;
+import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.Test;
 
 class OriginalEmailExtractorTest {
 
@@ -38,7 +37,8 @@ class OriginalEmailExtractorTest {
         assertThat(raw).doesNotContain("Journal report");
         assertThat(raw).contains("Hello Bob, please review the quarterly numbers.");
         assertThat(original.message().getMessageID()).isEqualTo("<original-123@example.com>");
-        assertThat(original.message().getFrom()[0].toString()).isEqualTo("Alice <alice@example.com>");
+        assertThat(original.message().getFrom()[0].toString())
+                .isEqualTo("Alice <alice@example.com>");
     }
 
     @Test

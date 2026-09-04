@@ -16,15 +16,12 @@
 
 package uk.ekwong.mailcleaner.actuator;
 
-import uk.ekwong.mailcleaner.consumer.MailMetaConsumer;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.stereotype.Component;
+import uk.ekwong.mailcleaner.consumer.MailMetaConsumer;
 
-/**
- * Reports whether the RocketMQ consumer is currently subscribed to
- * {@code mail_meta_topic}.
- */
+/** Reports whether the RocketMQ consumer is currently subscribed to {@code mail_meta_topic}. */
 @Component
 public class RocketMqHealthIndicator implements HealthIndicator {
 

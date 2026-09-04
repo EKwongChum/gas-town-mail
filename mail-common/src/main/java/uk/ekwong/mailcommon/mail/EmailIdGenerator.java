@@ -20,13 +20,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 /**
- * Generates the archive id: {@code Base64(sender)_Base64(Message-Id)}.
- * The same id is used as the MongoDB document id and the object storage key.
+ * Generates the archive id: {@code Base64(sender)_Base64(Message-Id)}. The same id is used as the
+ * MongoDB document id and the object storage key.
  */
 public final class EmailIdGenerator {
 
-    private EmailIdGenerator() {
-    }
+    private EmailIdGenerator() {}
 
     public static String generate(String sender, String messageId) {
         return base64(normalize(sender)) + "_" + base64(normalize(messageId));

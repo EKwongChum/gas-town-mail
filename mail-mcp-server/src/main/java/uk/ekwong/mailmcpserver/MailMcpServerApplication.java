@@ -20,9 +20,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
- * Spring Boot application that exposes the archived email metadata (the
- * Elasticsearch {@code mail_info} index) through a standard MCP
- * (Model Context Protocol) server interface.
+ * Spring Boot application that exposes the archived email metadata (the Elasticsearch {@code
+ * mail_info} index) through a standard MCP (Model Context Protocol) server interface.
  */
 @SpringBootApplication
 public class MailMcpServerApplication {

@@ -19,9 +19,8 @@ package uk.ekwong.mailcommon.mail;
 import jakarta.mail.internet.MimeMessage;
 
 /**
- * The email that should be archived. When a journal report embeds the original
- * message as a {@code message/rfc822} part, the raw bytes are taken from that
- * part; otherwise the received message itself is treated as the original email.
+ * The email that should be archived. When a journal report embeds the original message as a {@code
+ * message/rfc822} part, the raw bytes are taken from that part; otherwise the received message
+ * itself is treated as the original email.
  */
-public record OriginalEmail(byte[] raw, MimeMessage message) {
-}
+public record OriginalEmail(byte[] raw, MimeMessage message) {}

@@ -21,9 +21,8 @@ import java.util.List;
 /**
  * Result of a batch deletion of Elasticsearch {@code mail_info} documents.
  *
- * @param requested   number of unique ids received in the request
- * @param deleted     number of documents actually removed
+ * @param requested number of unique ids received in the request
+ * @param deleted number of documents actually removed
  * @param notFoundIds ids that did not exist in the index
  */
-public record MailDeleteResponse(int requested, long deleted, List<String> notFoundIds) {
-}
+public record MailDeleteResponse(int requested, long deleted, List<String> notFoundIds) {}

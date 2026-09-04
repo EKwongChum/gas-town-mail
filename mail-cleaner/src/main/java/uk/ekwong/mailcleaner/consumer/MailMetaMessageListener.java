@@ -16,7 +16,8 @@
 
 package uk.ekwong.mailcleaner.consumer;
 
-import uk.ekwong.mailcleaner.service.MailCleaningService;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
@@ -24,14 +25,11 @@ import org.apache.rocketmq.common.message.MessageExt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
-import java.nio.charset.StandardCharsets;
-import java.util.List;
+import uk.ekwong.mailcleaner.service.MailCleaningService;
 
 /**
- * RocketMQ message listener for the {@code mail_meta_topic} topic. Each
- * message triggers one mail cleaning job; failures return
- * {@code RECONSUME_LATER} so RocketMQ redelivers the message.
+ * RocketMQ message listener for the {@code mail_meta_topic} topic. Each message triggers one mail
+ * cleaning job; failures return {@code RECONSUME_LATER} so RocketMQ redelivers the message.
  */
 @Component
 public class MailMetaMessageListener implements MessageListenerConcurrently {
@@ -45,7 +43,8 @@ public class MailMetaMessageListener implements MessageListenerConcurrently {
     }
 
     @Override
-    public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> msgs, ConsumeConcurrentlyContext context) {
+    public ConsumeConcurrentlyStatus consumeMessage(
+            List<MessageExt> msgs, ConsumeConcurrentlyContext context) {
         boolean allSucceeded = true;
         for (MessageExt msg : msgs) {
             try {

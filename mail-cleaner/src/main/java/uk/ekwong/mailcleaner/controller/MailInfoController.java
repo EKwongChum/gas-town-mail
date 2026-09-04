@@ -16,15 +16,15 @@
 
 package uk.ekwong.mailcleaner.controller;
 
-import uk.ekwong.mailcleaner.service.MailDeleteRequest;
-import uk.ekwong.mailcleaner.service.MailDeleteResponse;
-import uk.ekwong.mailcleaner.service.MailDeletionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uk.ekwong.mailcleaner.service.MailDeleteRequest;
+import uk.ekwong.mailcleaner.service.MailDeleteResponse;
+import uk.ekwong.mailcleaner.service.MailDeletionService;
 
 /**
  * HTTP interface to manage the Elasticsearch {@code mail_info} index.
@@ -40,7 +40,9 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/mail-info")
-@Tag(name = "Mail info management", description = "Manage documents in the Elasticsearch mail_info index")
+@Tag(
+        name = "Mail info management",
+        description = "Manage documents in the Elasticsearch mail_info index")
 public class MailInfoController {
 
     private final MailDeletionService deletionService;
@@ -50,11 +52,13 @@ public class MailInfoController {
     }
 
     @PostMapping("/delete")
-    @Operation(summary = "Batch delete Elasticsearch documents by id",
-            description = "Deletes the mail_info documents with the given archive ids "
-                    + "(MongoDB _id / object storage key). Blank ids are ignored, duplicates are "
-                    + "collapsed, and ids that do not exist are reported in notFoundIds. "
-                    + "Empty requests or more than 1000 ids return 400.")
+    @Operation(
+            summary = "Batch delete Elasticsearch documents by id",
+            description =
+                    "Deletes the mail_info documents with the given archive ids "
+                            + "(MongoDB _id / object storage key). Blank ids are ignored, duplicates are "
+                            + "collapsed, and ids that do not exist are reported in notFoundIds. "
+                            + "Empty requests or more than 1000 ids return 400.")
     public MailDeleteResponse delete(@RequestBody MailDeleteRequest request) {
         return deletionService.deleteByIds(request.ids());
     }

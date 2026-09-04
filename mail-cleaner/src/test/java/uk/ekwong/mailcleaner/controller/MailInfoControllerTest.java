@@ -16,26 +16,25 @@
 
 package uk.ekwong.mailcleaner.controller;
 
-import uk.ekwong.mailcleaner.service.MailDeleteResponse;
-import uk.ekwong.mailcleaner.service.MailDeletionService;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-
-import java.util.List;
-import java.util.Map;
-
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import uk.ekwong.mailcleaner.service.MailDeleteResponse;
+import uk.ekwong.mailcleaner.service.MailDeletionService;
 
 class MailInfoControllerTest {
 
@@ -45,10 +44,10 @@ class MailInfoControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders
-                .standaloneSetup(new MailInfoController(deletionService))
-                .setControllerAdvice(new GlobalExceptionHandler())
-                .build();
+        mockMvc =
+                MockMvcBuilders.standaloneSetup(new MailInfoController(deletionService))
+                        .setControllerAdvice(new GlobalExceptionHandler())
+                        .build();
     }
 
     @Test
@@ -56,10 +55,14 @@ class MailInfoControllerTest {
         when(deletionService.deleteByIds(anyList()))
                 .thenReturn(new MailDeleteResponse(3, 2, List.of("id-missing")));
 
-        mockMvc.perform(post("/api/mail-info/delete")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(
-                                Map.of("ids", List.of("id-1", "id-2", "id-missing")))))
+        mockMvc.perform(
+                        post("/api/mail-info/delete")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        objectMapper.writeValueAsString(
+                                                Map.of(
+                                                        "ids",
+                                                        List.of("id-1", "id-2", "id-missing")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.requested").value(3))
                 .andExpect(jsonPath("$.deleted").value(2))
@@ -71,19 +74,22 @@ class MailInfoControllerTest {
     @Test
     void deleteReturns400ForEmptyIds() throws Exception {
         doThrow(new IllegalArgumentException("ids must not be empty"))
-                .when(deletionService).deleteByIds(List.of());
+                .when(deletionService)
+                .deleteByIds(List.of());
 
-        mockMvc.perform(post("/api/mail-info/delete")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"ids\":[]}"))
+        mockMvc.perform(
+                        post("/api/mail-info/delete")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"ids\":[]}"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     void deleteReturns400ForMalformedBody() throws Exception {
-        mockMvc.perform(post("/api/mail-info/delete")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("not-json"))
+        mockMvc.perform(
+                        post("/api/mail-info/delete")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("not-json"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Malformed request body"));
     }

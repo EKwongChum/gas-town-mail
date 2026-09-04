@@ -16,46 +16,58 @@
 
 package uk.ekwong.journalarchiver.service;
 
-import uk.ekwong.journalarchiver.config.AppProperties;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import uk.ekwong.journalarchiver.config.AppProperties;
 
 class DeadLetterStoreTest {
 
-    @TempDir
-    Path tempDir;
+    @TempDir Path tempDir;
 
     @Test
     void writesEmlAndContextSidecar() throws Exception {
         AppProperties properties = new AppProperties();
         properties.getProcessing().setDeadLetterDir(tempDir.toString());
-        ObjectMapper mapper = new ObjectMapper()
-                .registerModule(new JavaTimeModule())
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        ObjectMapper mapper =
+                new ObjectMapper()
+                        .registerModule(new JavaTimeModule())
+                        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         DeadLetterStore store = new DeadLetterStore(properties, mapper);
         byte[] raw = "Subject: test\r\n\r\nbody".getBytes(StandardCharsets.UTF_8);
 
-        store.save(raw, "sender@example.com", List.of("rcpt@example.com"), null, new RuntimeException("boom"));
+        store.save(
+                raw,
+                "sender@example.com",
+                List.of("rcpt@example.com"),
+                null,
+                new RuntimeException("boom"));
 
         List<Path> files;
         try (var stream = Files.list(tempDir)) {
             files = stream.toList();
         }
         assertThat(files).hasSize(2);
-        Path eml = files.stream().filter(p -> p.toString().endsWith(".eml")).findFirst().orElseThrow();
-        Path context = files.stream().filter(p -> p.toString().endsWith(".json")).findFirst().orElseThrow();
+        Path eml =
+                files.stream().filter(p -> p.toString().endsWith(".eml")).findFirst().orElseThrow();
+        Path context =
+                files.stream()
+                        .filter(p -> p.toString().endsWith(".json"))
+                        .findFirst()
+                        .orElseThrow();
         assertThat(Files.readAllBytes(eml)).isEqualTo(raw);
         String contextJson = Files.readString(context);
-        assertThat(contextJson).contains("envelopeSender").contains("sender@example.com").contains("boom");
+        assertThat(contextJson)
+                .contains("envelopeSender")
+                .contains("sender@example.com")
+                .contains("boom");
     }
 }

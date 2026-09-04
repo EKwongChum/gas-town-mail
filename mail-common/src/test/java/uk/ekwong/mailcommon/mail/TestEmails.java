@@ -18,15 +18,13 @@ package uk.ekwong.mailcommon.mail;
 
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
-
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
 public final class TestEmails {
 
-    private TestEmails() {
-    }
+    private TestEmails() {}
 
     public static MimeMessage parse(String raw) throws Exception {
         return new MimeMessage(
@@ -39,7 +37,8 @@ public final class TestEmails {
     }
 
     public static String journalReport() {
-        return withCrlf("""
+        return withCrlf(
+                """
                 Return-Path: <>
                 From: Microsoft Exchange Server <postmaster@corp.local>
                 To: journal@archive.local
@@ -74,7 +73,8 @@ public final class TestEmails {
     }
 
     public static String plainEmail() {
-        return withCrlf("""
+        return withCrlf(
+                """
                 From: Alice <alice@example.com>
                 To: Bob <bob@example.com>
                 Subject: Just a normal email
@@ -88,7 +88,8 @@ public final class TestEmails {
     }
 
     public static String emailWithAttachments() {
-        return withCrlf("""
+        return withCrlf(
+                """
                 From: Alice <alice@example.com>
                 To: Bob <bob@example.com>
                 Cc: Carol <carol@example.com>

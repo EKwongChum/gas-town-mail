@@ -16,26 +16,6 @@
 
 package uk.ekwong.journalarchiver.service;
 
-import uk.ekwong.journalarchiver.TestEmails;
-import uk.ekwong.journalarchiver.config.AppProperties;
-import uk.ekwong.journalarchiver.model.JournalEmailInfo;
-import uk.ekwong.journalarchiver.notify.MailMetaPublisher;
-import uk.ekwong.mailcommon.mail.EmailDetailsExtractor;
-import uk.ekwong.mailcommon.mail.EmailIdGenerator;
-import uk.ekwong.mailcommon.mail.JournalDetector;
-import uk.ekwong.mailcommon.mail.OriginalEmailExtractor;
-import uk.ekwong.mailcommon.storage.ObjectStorageService;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Query;
-import org.springframework.data.mongodb.core.query.Update;
-
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
-import java.util.Base64;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -47,6 +27,25 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
+import uk.ekwong.journalarchiver.TestEmails;
+import uk.ekwong.journalarchiver.config.AppProperties;
+import uk.ekwong.journalarchiver.model.JournalEmailInfo;
+import uk.ekwong.journalarchiver.notify.MailMetaPublisher;
+import uk.ekwong.mailcommon.mail.EmailDetailsExtractor;
+import uk.ekwong.mailcommon.mail.EmailIdGenerator;
+import uk.ekwong.mailcommon.mail.JournalDetector;
+import uk.ekwong.mailcommon.mail.OriginalEmailExtractor;
+import uk.ekwong.mailcommon.storage.ObjectStorageService;
+
 class JournalProcessingServiceTest {
 
     private final MongoTemplate mongoTemplate = mock(MongoTemplate.class);
@@ -57,16 +56,19 @@ class JournalProcessingServiceTest {
     @Test
     void archivesJournalEmailAndPublishes() {
         byte[] raw = TestEmails.journalReport().getBytes(StandardCharsets.UTF_8);
-        String expectedId = EmailIdGenerator.generate(
-                "Alice <alice@example.com>", "<original-123@example.com>");
+        String expectedId =
+                EmailIdGenerator.generate(
+                        "Alice <alice@example.com>", "<original-123@example.com>");
         JournalEmailInfo saved = info(expectedId);
         when(mongoTemplate.findById(expectedId, JournalEmailInfo.class)).thenReturn(saved);
         when(publisher.publish(saved)).thenReturn(true);
 
-        service(properties(1, 0)).process(raw, "postmaster@corp.local", List.of("journal@archive.local"), null);
+        service(properties(1, 0))
+                .process(raw, "postmaster@corp.local", List.of("journal@archive.local"), null);
 
         verify(storage).store(eq(expectedId), any(byte[].class));
-        verify(mongoTemplate).upsert(any(Query.class), any(Update.class), eq(JournalEmailInfo.class));
+        verify(mongoTemplate)
+                .upsert(any(Query.class), any(Update.class), eq(JournalEmailInfo.class));
         verify(publisher).publish(saved);
         verifyNoInteractions(deadLetterStore);
     }
@@ -75,12 +77,14 @@ class JournalProcessingServiceTest {
     void retriesAndWritesDeadLetterWhenStorageKeepsFailing() {
         byte[] raw = TestEmails.journalReport().getBytes(StandardCharsets.UTF_8);
         doThrow(new RuntimeException("object storage unavailable"))
-                .when(storage).store(anyString(), any(byte[].class));
+                .when(storage)
+                .store(anyString(), any(byte[].class));
 
         service(properties(3, 0)).process(raw, "postmaster@corp.local", List.of(), null);
 
         verify(storage, times(3)).store(anyString(), any(byte[].class));
-        verify(deadLetterStore).save(eq(raw), eq("postmaster@corp.local"), any(), any(), any(Throwable.class));
+        verify(deadLetterStore)
+                .save(eq(raw), eq("postmaster@corp.local"), any(), any(), any(Throwable.class));
         verifyNoInteractions(mongoTemplate, publisher);
     }
 
@@ -110,33 +114,44 @@ class JournalProcessingServiceTest {
     @Test
     void generatesMessageIdWhenOriginalHasNone() {
         // remove the Message-Id from the embedded original email
-        String report = TestEmails.journalReport().replace("Message-ID: <original-123@example.com>\r\n", "");
+        String report =
+                TestEmails.journalReport()
+                        .replace("Message-ID: <original-123@example.com>\r\n", "");
         byte[] raw = report.getBytes(StandardCharsets.UTF_8);
-        when(mongoTemplate.findById(anyString(), eq(JournalEmailInfo.class))).thenAnswer(invocation -> {
-            String id = invocation.getArgument(0);
-            JournalEmailInfo info = new JournalEmailInfo();
-            info.setId(id);
-            info.setObjectKey(id);
-            info.setMessageId("<generated@journal-archiver.local>");
-            info.setCreatedAt(Instant.parse("2026-08-16T05:00:00Z"));
-            info.setUpdatedAt(Instant.parse("2026-08-16T05:00:00Z"));
-            info.setModificationCount(1);
-            return info;
-        });
+        when(mongoTemplate.findById(anyString(), eq(JournalEmailInfo.class)))
+                .thenAnswer(
+                        invocation -> {
+                            String id = invocation.getArgument(0);
+                            JournalEmailInfo info = new JournalEmailInfo();
+                            info.setId(id);
+                            info.setObjectKey(id);
+                            info.setMessageId("<generated@journal-archiver.local>");
+                            info.setCreatedAt(Instant.parse("2026-08-16T05:00:00Z"));
+                            info.setUpdatedAt(Instant.parse("2026-08-16T05:00:00Z"));
+                            info.setModificationCount(1);
+                            return info;
+                        });
         when(publisher.publish(any(JournalEmailInfo.class))).thenReturn(true);
 
         service(properties(1, 0)).process(raw, "postmaster@corp.local", List.of(), null);
 
         ArgumentCaptor<Query> queryCaptor = ArgumentCaptor.forClass(Query.class);
-        verify(mongoTemplate).upsert(queryCaptor.capture(), any(Update.class), eq(JournalEmailInfo.class));
+        verify(mongoTemplate)
+                .upsert(queryCaptor.capture(), any(Update.class), eq(JournalEmailInfo.class));
         String archivedId = (String) queryCaptor.getValue().getQueryObject().get("_id");
         String[] parts = archivedId.split("_", 2);
-        assertThat(parts[0]).isEqualTo(Base64.getEncoder()
-                .encodeToString("Alice <alice@example.com>".getBytes(StandardCharsets.UTF_8)));
-        String decodedMessageId = new String(Base64.getDecoder().decode(parts[1]), StandardCharsets.UTF_8);
+        assertThat(parts[0])
+                .isEqualTo(
+                        Base64.getEncoder()
+                                .encodeToString(
+                                        "Alice <alice@example.com>"
+                                                .getBytes(StandardCharsets.UTF_8)));
+        String decodedMessageId =
+                new String(Base64.getDecoder().decode(parts[1]), StandardCharsets.UTF_8);
         assertThat(decodedMessageId).startsWith("<").endsWith("@journal-archiver.local>");
 
-        ArgumentCaptor<JournalEmailInfo> infoCaptor = ArgumentCaptor.forClass(JournalEmailInfo.class);
+        ArgumentCaptor<JournalEmailInfo> infoCaptor =
+                ArgumentCaptor.forClass(JournalEmailInfo.class);
         verify(publisher).publish(infoCaptor.capture());
         assertThat(infoCaptor.getValue().getMessageId())
                 .startsWith("<")

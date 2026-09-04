@@ -18,8 +18,7 @@ package uk.ekwong.mailcleaner;
 
 public final class CleanerTestEmails {
 
-    private CleanerTestEmails() {
-    }
+    private CleanerTestEmails() {}
 
     public static String emailWithAttachments() {
         return """
@@ -50,6 +49,7 @@ public final class CleanerTestEmails {
                 some notes
 
                 --attach-boundary--
-                """.replace("\n", "\r\n");
+                """
+                .replace("\n", "\r\n");
     }
 }

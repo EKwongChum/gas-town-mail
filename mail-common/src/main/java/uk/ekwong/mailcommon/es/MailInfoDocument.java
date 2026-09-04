@@ -16,50 +16,63 @@
 
 package uk.ekwong.mailcommon.es;
 
+import java.time.Instant;
+import java.util.List;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.Document;
 import org.springframework.data.elasticsearch.annotations.Field;
 import org.springframework.data.elasticsearch.annotations.FieldType;
 
-import java.time.Instant;
-import java.util.List;
-
 /**
- * Elasticsearch document in the {@code mail_info} index. The id is the archive
- * id (MongoDB document id / object storage key), so re-processing the same
- * notification updates the same document instead of duplicating it.
- * Shared by mail-cleaner (writer) and mail-mcp-server (reader).
+ * Elasticsearch document in the {@code mail_info} index. The id is the archive id (MongoDB document
+ * id / object storage key), so re-processing the same notification updates the same document
+ * instead of duplicating it. Shared by mail-cleaner (writer) and mail-mcp-server (reader).
  */
 @Document(indexName = "mail_info")
 public class MailInfoDocument {
 
-    @Id
-    private String id;
+    @Id private String id;
+
     @Field(type = FieldType.Keyword)
     private String sender;
+
     @Field(type = FieldType.Keyword)
     private String from;
+
     @Field(type = FieldType.Keyword)
     private String to;
+
     @Field(type = FieldType.Keyword)
     private String cc;
+
     @Field(type = FieldType.Keyword)
     private String messageId;
+
     @Field(type = FieldType.Date)
     private Instant receivedTime;
+
     @Field(type = FieldType.Text)
     private String subject;
+
     @Field(type = FieldType.Keyword)
     private String contentType;
+
     @Field(type = FieldType.Keyword)
     private List<String> attachmentNames;
 
-    public MailInfoDocument() {
-    }
+    public MailInfoDocument() {}
 
-    public static MailInfoDocument from(String id, String sender, String from, String to, String cc,
-                                        String messageId, Instant receivedTime, String subject,
-                                        String contentType, List<String> attachmentNames) {
+    public static MailInfoDocument from(
+            String id,
+            String sender,
+            String from,
+            String to,
+            String cc,
+            String messageId,
+            Instant receivedTime,
+            String subject,
+            String contentType,
+            List<String> attachmentNames) {
         MailInfoDocument doc = new MailInfoDocument();
         doc.id = id;
         doc.sender = sender;

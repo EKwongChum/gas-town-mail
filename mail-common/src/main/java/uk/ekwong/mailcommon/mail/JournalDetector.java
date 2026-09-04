@@ -21,28 +21,26 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.Multipart;
 import jakarta.mail.Part;
 import jakarta.mail.internet.MimeMessage;
-import org.springframework.stereotype.Component;
-
 import java.io.IOException;
+import org.springframework.stereotype.Component;
 
 /**
  * Detects whether a received message is in journal format.
  *
- * <p>A message is considered a journal report when it carries one of the
- * Exchange journal report headers ({@code X-MS-Journal-Report} or
- * {@code X-MS-Exchange-Organization-Journal-Report}) or embeds the original
- * message as a {@code message/rfc822} body part. Both checks can be toggled
+ * <p>A message is considered a journal report when it carries one of the Exchange journal report
+ * headers ({@code X-MS-Journal-Report} or {@code X-MS-Exchange-Organization-Journal-Report}) or
+ * embeds the original message as a {@code message/rfc822} body part. Both checks can be toggled
  * through configuration.
  */
 @Component
 public class JournalDetector {
 
     private static final String[] JOURNAL_HEADERS = {
-            "X-MS-Journal-Report",
-            "X-MS-Exchange-Organization-Journal-Report"
+        "X-MS-Journal-Report", "X-MS-Exchange-Organization-Journal-Report"
     };
 
-    public boolean isJournal(MimeMessage message, boolean detectByHeader, boolean detectByRfc822Attachment)
+    public boolean isJournal(
+            MimeMessage message, boolean detectByHeader, boolean detectByRfc822Attachment)
             throws MessagingException, IOException {
         if (detectByHeader && hasJournalHeader(message)) {
             return true;

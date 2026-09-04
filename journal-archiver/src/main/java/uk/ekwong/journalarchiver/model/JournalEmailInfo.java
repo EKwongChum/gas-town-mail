@@ -16,23 +16,20 @@
 
 package uk.ekwong.journalarchiver.model;
 
+import java.time.Instant;
+import java.util.List;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.Instant;
-import java.util.List;
-
 /**
- * MongoDB document holding the basic information of a journaled email.
- * The document id equals {@code Base64(sender)_Base64(Message-Id)} and is also
- * used as the object storage key.
+ * MongoDB document holding the basic information of a journaled email. The document id equals
+ * {@code Base64(sender)_Base64(Message-Id)} and is also used as the object storage key.
  */
 @Document(collection = "journal_emails")
 public class JournalEmailInfo {
 
-    @Id
-    private String id;
+    @Id private String id;
     private String sender;
     private String from;
     private String to;
@@ -43,8 +40,7 @@ public class JournalEmailInfo {
     private List<String> recipients;
     private String clientAddress;
     private Instant receivedAt;
-    @Indexed
-    private Instant createdAt;
+    @Indexed private Instant createdAt;
     private Instant updatedAt;
     private long modificationCount;
     private String objectKey;

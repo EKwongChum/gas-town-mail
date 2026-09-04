@@ -16,19 +16,16 @@
 
 package uk.ekwong.journalarchiver.service;
 
-import uk.ekwong.journalarchiver.config.AppProperties;
-import uk.ekwong.mailcommon.mail.EmailDetails;
-import uk.ekwong.mailcommon.mail.EmailDetailsExtractor;
-import uk.ekwong.mailcommon.mail.EmailIdGenerator;
-import uk.ekwong.mailcommon.mail.JournalDetector;
-import uk.ekwong.mailcommon.mail.OriginalEmail;
-import uk.ekwong.mailcommon.mail.OriginalEmailExtractor;
-import uk.ekwong.journalarchiver.model.JournalEmailInfo;
-import uk.ekwong.mailcommon.storage.ObjectStorageService;
-import uk.ekwong.journalarchiver.notify.MailMetaPublisher;
 import jakarta.mail.MessagingException;
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.net.SocketAddress;
+import java.time.Instant;
+import java.util.List;
+import java.util.Properties;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -37,18 +34,20 @@ import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.net.SocketAddress;
-import java.time.Instant;
-import java.util.List;
-import java.util.Properties;
-import java.util.UUID;
+import uk.ekwong.journalarchiver.config.AppProperties;
+import uk.ekwong.journalarchiver.model.JournalEmailInfo;
+import uk.ekwong.journalarchiver.notify.MailMetaPublisher;
+import uk.ekwong.mailcommon.mail.EmailDetails;
+import uk.ekwong.mailcommon.mail.EmailDetailsExtractor;
+import uk.ekwong.mailcommon.mail.EmailIdGenerator;
+import uk.ekwong.mailcommon.mail.JournalDetector;
+import uk.ekwong.mailcommon.mail.OriginalEmail;
+import uk.ekwong.mailcommon.mail.OriginalEmailExtractor;
+import uk.ekwong.mailcommon.storage.ObjectStorageService;
 
 /**
- * Core pipeline: detect journal format, extract the original email, persist its
- * basic information in MongoDB and store the raw email in object storage.
+ * Core pipeline: detect journal format, extract the original email, persist its basic information
+ * in MongoDB and store the raw email in object storage.
  */
 @Service
 public class JournalProcessingService {
@@ -64,14 +63,15 @@ public class JournalProcessingService {
     private final DeadLetterStore deadLetterStore;
     private final AppProperties properties;
 
-    public JournalProcessingService(JournalDetector journalDetector,
-                                    OriginalEmailExtractor originalEmailExtractor,
-                                    EmailDetailsExtractor emailDetailsExtractor,
-                                    MongoTemplate mongoTemplate,
-                                    ObjectStorageService objectStorageService,
-                                    MailMetaPublisher mailMetaPublisher,
-                                    DeadLetterStore deadLetterStore,
-                                    AppProperties properties) {
+    public JournalProcessingService(
+            JournalDetector journalDetector,
+            OriginalEmailExtractor originalEmailExtractor,
+            EmailDetailsExtractor emailDetailsExtractor,
+            MongoTemplate mongoTemplate,
+            ObjectStorageService objectStorageService,
+            MailMetaPublisher mailMetaPublisher,
+            DeadLetterStore deadLetterStore,
+            AppProperties properties) {
         this.journalDetector = journalDetector;
         this.originalEmailExtractor = originalEmailExtractor;
         this.emailDetailsExtractor = emailDetailsExtractor;
@@ -83,7 +83,11 @@ public class JournalProcessingService {
     }
 
     @Async("journalProcessingExecutor")
-    public void process(byte[] rawMessage, String envelopeSender, List<String> recipients, SocketAddress clientAddress) {
+    public void process(
+            byte[] rawMessage,
+            String envelopeSender,
+            List<String> recipients,
+            SocketAddress clientAddress) {
         AppProperties.Processing config = properties.getProcessing();
         int maxAttempts = Math.max(1, config.getRetryMaxAttempts());
         Throwable lastError = null;
@@ -93,8 +97,12 @@ public class JournalProcessingService {
                 return;
             } catch (Exception e) {
                 lastError = e;
-                log.warn("Processing attempt {}/{} failed (envelope sender={}): {}",
-                        attempt, maxAttempts, envelopeSender, e.toString());
+                log.warn(
+                        "Processing attempt {}/{} failed (envelope sender={}): {}",
+                        attempt,
+                        maxAttempts,
+                        envelopeSender,
+                        e.toString());
                 if (attempt < maxAttempts && config.getRetryBackoffMs() > 0) {
                     try {
                         Thread.sleep(config.getRetryBackoffMs() * attempt);
@@ -108,22 +116,29 @@ public class JournalProcessingService {
         deadLetterStore.save(rawMessage, envelopeSender, recipients, clientAddress, lastError);
     }
 
-    private void doProcess(byte[] rawMessage, String envelopeSender, List<String> recipients, SocketAddress clientAddress)
+    private void doProcess(
+            byte[] rawMessage,
+            String envelopeSender,
+            List<String> recipients,
+            SocketAddress clientAddress)
             throws MessagingException, IOException {
         MimeMessage received = parse(rawMessage);
         AppProperties.Journal journalConfig = properties.getJournal();
 
-        if (!journalDetector.isJournal(received,
+        if (!journalDetector.isJournal(
+                received,
                 journalConfig.isDetectByHeader(),
                 journalConfig.isDetectByRfc822Attachment())) {
             log.debug("Ignoring non-journal message (envelope sender={})", envelopeSender);
             return;
         }
 
-        OriginalEmail original = originalEmailExtractor.extractOriginal(
-                received, rawMessage, journalConfig.isExtractOriginalAttachment());
-        EmailDetails details = emailDetailsExtractor.extract(
-                original.message(), envelopeSender, journalConfig.getSenderResolution());
+        OriginalEmail original =
+                originalEmailExtractor.extractOriginal(
+                        received, rawMessage, journalConfig.isExtractOriginalAttachment());
+        EmailDetails details =
+                emailDetailsExtractor.extract(
+                        original.message(), envelopeSender, journalConfig.getSenderResolution());
 
         String messageId = details.messageId();
         if (isBlank(messageId) && journalConfig.isGenerateMessageIdIfMissing()) {
@@ -149,23 +164,32 @@ public class JournalProcessingService {
         }
 
         if (!mailMetaPublisher.publish(info)) {
-            log.warn("Notification was not published for id={}; use the resend endpoint to replay", id);
+            log.warn(
+                    "Notification was not published for id={}; use the resend endpoint to replay",
+                    id);
         }
 
-        log.info("Archived journal email: id={}, sender={}, from={}, subject={}, messageId={}",
-                id, details.sender(), details.from(), details.subject(), messageId);
+        log.info(
+                "Archived journal email: id={}, sender={}, from={}, subject={}, messageId={}",
+                id,
+                details.sender(),
+                details.from(),
+                details.subject(),
+                messageId);
     }
 
     private MimeMessage parse(byte[] raw) throws MessagingException {
-        return new MimeMessage(Session.getInstance(new Properties()), new ByteArrayInputStream(raw));
+        return new MimeMessage(
+                Session.getInstance(new Properties()), new ByteArrayInputStream(raw));
     }
 
-    private JournalEmailInfo saveMetadata(String id,
-                                          EmailDetails details,
-                                          String messageId,
-                                          String envelopeSender,
-                                          List<String> recipients,
-                                          SocketAddress clientAddress) {
+    private JournalEmailInfo saveMetadata(
+            String id,
+            EmailDetails details,
+            String messageId,
+            String envelopeSender,
+            List<String> recipients,
+            SocketAddress clientAddress) {
         Instant now = Instant.now();
         Query query = Query.query(Criteria.where("_id").is(id));
         Update update = new Update();
@@ -192,8 +216,10 @@ public class JournalProcessingService {
         if (saved == null) {
             throw new IllegalStateException("MongoDB upsert did not produce document " + id);
         }
-        log.info("Saved journal email metadata to MongoDB: id={}, modificationCount={}",
-                id, saved.getModificationCount());
+        log.info(
+                "Saved journal email metadata to MongoDB: id={}, modificationCount={}",
+                id,
+                saved.getModificationCount());
         return saved;
     }
 

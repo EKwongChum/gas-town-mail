@@ -16,25 +16,16 @@
 
 package uk.ekwong.journalarchiver.smtp;
 
-import uk.ekwong.journalarchiver.TestEmails;
-import uk.ekwong.journalarchiver.config.AppProperties;
-import uk.ekwong.journalarchiver.model.JournalEmailInfo;
-import uk.ekwong.journalarchiver.notify.MailMetaPublisher;
-import uk.ekwong.journalarchiver.service.DeadLetterStore;
-import uk.ekwong.journalarchiver.service.JournalProcessingService;
-import uk.ekwong.mailcommon.mail.EmailDetailsExtractor;
-import uk.ekwong.mailcommon.mail.EmailIdGenerator;
-import uk.ekwong.mailcommon.mail.JournalDetector;
-import uk.ekwong.mailcommon.mail.OriginalEmailExtractor;
-import uk.ekwong.mailcommon.storage.ObjectStorageService;
-import org.bson.Document;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Query;
-import org.springframework.data.mongodb.core.query.Update;
-import org.subethamail.smtp.server.SMTPServer;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -46,17 +37,25 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import org.bson.Document;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
+import org.subethamail.smtp.server.SMTPServer;
+import uk.ekwong.journalarchiver.TestEmails;
+import uk.ekwong.journalarchiver.config.AppProperties;
+import uk.ekwong.journalarchiver.model.JournalEmailInfo;
+import uk.ekwong.journalarchiver.notify.MailMetaPublisher;
+import uk.ekwong.journalarchiver.service.DeadLetterStore;
+import uk.ekwong.journalarchiver.service.JournalProcessingService;
+import uk.ekwong.mailcommon.mail.EmailDetailsExtractor;
+import uk.ekwong.mailcommon.mail.EmailIdGenerator;
+import uk.ekwong.mailcommon.mail.JournalDetector;
+import uk.ekwong.mailcommon.mail.OriginalEmailExtractor;
+import uk.ekwong.mailcommon.storage.ObjectStorageService;
 
 class SmtpEndToEndTest {
 
@@ -69,27 +68,34 @@ class SmtpEndToEndTest {
         DeadLetterStore deadLetterStore = mock(DeadLetterStore.class);
         AppProperties properties = new AppProperties();
 
-        JournalProcessingService processor = new JournalProcessingService(
-                new JournalDetector(),
-                new OriginalEmailExtractor(),
-                new EmailDetailsExtractor(),
-                mongoTemplate,
-                storage,
-                publisher,
-                deadLetterStore,
-                properties);
+        JournalProcessingService processor =
+                new JournalProcessingService(
+                        new JournalDetector(),
+                        new OriginalEmailExtractor(),
+                        new EmailDetailsExtractor(),
+                        mongoTemplate,
+                        storage,
+                        publisher,
+                        deadLetterStore,
+                        properties);
 
-        String expectedId = EmailIdGenerator.generate(
-                "Alice <alice@example.com>", "<original-123@example.com>");
+        String expectedId =
+                EmailIdGenerator.generate(
+                        "Alice <alice@example.com>", "<original-123@example.com>");
         JournalEmailInfo savedInfo = savedInfo(expectedId);
         when(mongoTemplate.findById(expectedId, JournalEmailInfo.class)).thenReturn(savedInfo);
 
-        SMTPServer server = SMTPServer.port(port)
-                .hostName("test.local")
-                .insertReceivedHeaders(false)
-                .messageHandlerFactory(context ->
-                        new CapturingMessageHandler(context, processor, properties.getSmtp().getMaxMessageSize()))
-                .build();
+        SMTPServer server =
+                SMTPServer.port(port)
+                        .hostName("test.local")
+                        .insertReceivedHeaders(false)
+                        .messageHandlerFactory(
+                                context ->
+                                        new CapturingMessageHandler(
+                                                context,
+                                                processor,
+                                                properties.getSmtp().getMaxMessageSize()))
+                        .build();
         server.start();
 
         try {
@@ -98,7 +104,10 @@ class SmtpEndToEndTest {
             ArgumentCaptor<Query> queryCaptor = ArgumentCaptor.forClass(Query.class);
             ArgumentCaptor<Update> updateCaptor = ArgumentCaptor.forClass(Update.class);
             verify(mongoTemplate, timeout(5000))
-                    .upsert(queryCaptor.capture(), updateCaptor.capture(), eq(JournalEmailInfo.class));
+                    .upsert(
+                            queryCaptor.capture(),
+                            updateCaptor.capture(),
+                            eq(JournalEmailInfo.class));
             assertThat(queryCaptor.getValue().getQueryObject().get("_id")).isEqualTo(expectedId);
             Document updateDoc = updateCaptor.getValue().getUpdateObject();
             Document inc = (Document) updateDoc.get("$inc");
@@ -113,14 +122,16 @@ class SmtpEndToEndTest {
             assertThat(stored).contains("Hello Bob, please review the quarterly numbers.");
             assertThat(stored).doesNotContain("Journal report");
 
-            ArgumentCaptor<JournalEmailInfo> notifyCaptor = ArgumentCaptor.forClass(JournalEmailInfo.class);
+            ArgumentCaptor<JournalEmailInfo> notifyCaptor =
+                    ArgumentCaptor.forClass(JournalEmailInfo.class);
             verify(publisher, timeout(5000)).publish(notifyCaptor.capture());
             assertThat(notifyCaptor.getValue().getId()).isEqualTo(expectedId);
             assertThat(notifyCaptor.getValue().getModificationCount()).isEqualTo(1);
 
             InOrder inOrder = inOrder(storage, mongoTemplate, publisher);
             inOrder.verify(storage).store(eq(expectedId), any(byte[].class));
-            inOrder.verify(mongoTemplate).upsert(any(Query.class), any(Update.class), eq(JournalEmailInfo.class));
+            inOrder.verify(mongoTemplate)
+                    .upsert(any(Query.class), any(Update.class), eq(JournalEmailInfo.class));
             inOrder.verify(publisher).publish(any(JournalEmailInfo.class));
 
             verifyNoInteractions(deadLetterStore);
@@ -138,21 +149,27 @@ class SmtpEndToEndTest {
         DeadLetterStore deadLetterStore = mock(DeadLetterStore.class);
         AppProperties properties = new AppProperties();
 
-        JournalProcessingService processor = new JournalProcessingService(
-                new JournalDetector(),
-                new OriginalEmailExtractor(),
-                new EmailDetailsExtractor(),
-                mongoTemplate,
-                storage,
-                publisher,
-                deadLetterStore,
-                properties);
+        JournalProcessingService processor =
+                new JournalProcessingService(
+                        new JournalDetector(),
+                        new OriginalEmailExtractor(),
+                        new EmailDetailsExtractor(),
+                        mongoTemplate,
+                        storage,
+                        publisher,
+                        deadLetterStore,
+                        properties);
 
-        SMTPServer server = SMTPServer.port(port)
-                .hostName("test.local")
-                .messageHandlerFactory(context ->
-                        new CapturingMessageHandler(context, processor, properties.getSmtp().getMaxMessageSize()))
-                .build();
+        SMTPServer server =
+                SMTPServer.port(port)
+                        .hostName("test.local")
+                        .messageHandlerFactory(
+                                context ->
+                                        new CapturingMessageHandler(
+                                                context,
+                                                processor,
+                                                properties.getSmtp().getMaxMessageSize()))
+                        .build();
         server.start();
 
         try {
@@ -191,10 +208,14 @@ class SmtpEndToEndTest {
 
     private static void sendViaRawSmtp(int port, String rawMessage) throws IOException {
         try (Socket socket = new Socket("127.0.0.1", port);
-             BufferedReader reader = new BufferedReader(
-                     new InputStreamReader(socket.getInputStream(), StandardCharsets.US_ASCII));
-             BufferedWriter writer = new BufferedWriter(
-                     new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.US_ASCII))) {
+                BufferedReader reader =
+                        new BufferedReader(
+                                new InputStreamReader(
+                                        socket.getInputStream(), StandardCharsets.US_ASCII));
+                BufferedWriter writer =
+                        new BufferedWriter(
+                                new OutputStreamWriter(
+                                        socket.getOutputStream(), StandardCharsets.US_ASCII))) {
             socket.setSoTimeout(10_000);
 
             expect(reader, "220");

@@ -16,7 +16,10 @@
 
 package uk.ekwong.mailcleaner.service;
 
-import uk.ekwong.mailcommon.es.MailInfoDocument;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.elasticsearch.client.elc.NativeQuery;
@@ -26,15 +29,11 @@ import org.springframework.data.elasticsearch.core.query.ByQueryResponse;
 import org.springframework.data.elasticsearch.core.query.Query;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+import uk.ekwong.mailcommon.es.MailInfoDocument;
 
 /**
- * Deletes archived email metadata from the Elasticsearch {@code mail_info}
- * index by archive id (MongoDB id / object storage key).
+ * Deletes archived email metadata from the Elasticsearch {@code mail_info} index by archive id
+ * (MongoDB id / object storage key).
  */
 @Service
 public class MailDeletionService {
@@ -50,9 +49,9 @@ public class MailDeletionService {
     }
 
     /**
-     * Deletes the documents with the given ids. Blank values are ignored and
-     * duplicates are collapsed. An empty request (after normalization) is
-     * rejected; more than {@link #MAX_IDS_PER_REQUEST} ids is also rejected.
+     * Deletes the documents with the given ids. Blank values are ignored and duplicates are
+     * collapsed. An empty request (after normalization) is rejected; more than {@link
+     * #MAX_IDS_PER_REQUEST} ids is also rejected.
      *
      * @return how many documents were requested, deleted and which ids were not found
      */
@@ -62,27 +61,33 @@ public class MailDeletionService {
             throw new IllegalArgumentException("ids must not be empty");
         }
         if (normalized.size() > MAX_IDS_PER_REQUEST) {
-            throw new IllegalArgumentException("too many ids, max " + MAX_IDS_PER_REQUEST + " per request");
+            throw new IllegalArgumentException(
+                    "too many ids, max " + MAX_IDS_PER_REQUEST + " per request");
         }
 
         // One multi-get round trip tells us which ids actually exist, so the
         // caller can distinguish "deleted" from "was already gone".
         Set<String> existing = findExistingIds(normalized);
-        List<String> notFound = normalized.stream()
-                .filter(id -> !existing.contains(id))
-                .toList();
+        List<String> notFound = normalized.stream().filter(id -> !existing.contains(id)).toList();
 
         long deleted = 0;
         if (!existing.isEmpty()) {
-            Query deleteQuery = NativeQuery.builder()
-                    .withQuery(q -> q.ids(i -> i.values(new ArrayList<>(existing))))
-                    .build();
-            ByQueryResponse response = elasticsearchOperations.delete(deleteQuery, MailInfoDocument.class);
+            Query deleteQuery =
+                    NativeQuery.builder()
+                            .withQuery(q -> q.ids(i -> i.values(new ArrayList<>(existing))))
+                            .build();
+            ByQueryResponse response =
+                    elasticsearchOperations.delete(deleteQuery, MailInfoDocument.class);
             deleted = response.getDeleted();
-            log.info("Deleted {} of {} requested mail_info documents ({} not found)",
-                    deleted, normalized.size(), notFound.size());
+            log.info(
+                    "Deleted {} of {} requested mail_info documents ({} not found)",
+                    deleted,
+                    normalized.size(),
+                    notFound.size());
         } else {
-            log.info("No mail_info documents to delete: all {} ids were not found", normalized.size());
+            log.info(
+                    "No mail_info documents to delete: all {} ids were not found",
+                    normalized.size());
         }
         return new MailDeleteResponse(normalized.size(), deleted, notFound);
     }
@@ -104,10 +109,6 @@ public class MailDeletionService {
         if (ids == null) {
             return List.of();
         }
-        return ids.stream()
-                .filter(StringUtils::hasText)
-                .map(String::trim)
-                .distinct()
-                .toList();
+        return ids.stream().filter(StringUtils::hasText).map(String::trim).distinct().toList();
     }
 }

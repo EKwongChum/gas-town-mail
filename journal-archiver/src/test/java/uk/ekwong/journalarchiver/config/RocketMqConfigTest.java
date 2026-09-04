@@ -16,10 +16,10 @@
 
 package uk.ekwong.journalarchiver.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class RocketMqConfigTest {
 

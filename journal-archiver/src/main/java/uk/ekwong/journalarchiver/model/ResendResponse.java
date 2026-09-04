@@ -21,17 +21,11 @@ import java.util.List;
 /**
  * Result of a resend operation.
  *
- * @param total     number of ids that were selected for resending
+ * @param total number of ids that were selected for resending
  * @param succeeded number of notifications published successfully
- * @param failed    number of ids that could not be resent
- * @param ids       the ids that were processed
+ * @param failed number of ids that could not be resent
+ * @param ids the ids that were processed
  * @param notFoundIds ids that do not exist in MongoDB (counted as failed)
  */
 public record ResendResponse(
-        int total,
-        int succeeded,
-        int failed,
-        List<String> ids,
-        List<String> notFoundIds
-) {
-}
+        int total, int succeeded, int failed, List<String> ids, List<String> notFoundIds) {}

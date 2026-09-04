@@ -16,14 +16,13 @@
 
 package uk.ekwong.journalarchiver.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
-
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class AppPropertiesTest {
 
@@ -39,15 +38,16 @@ class AppPropertiesTest {
 
         assertThat(properties.getSmtp().getPort()).isEqualTo(2525);
         assertThat(properties.getSmtp().getMaxMessageSize()).isEqualTo(20 * 1024 * 1024);
-        assertThat(properties.getNotify().getRocketMq().getNameServer()).isEqualTo("127.0.0.1:9876");
+        assertThat(properties.getNotify().getRocketMq().getNameServer())
+                .isEqualTo("127.0.0.1:9876");
         assertThat(properties.getNotify().getRocketMq().getTopic()).isEqualTo("mail_meta_topic");
         assertThat(properties.getNotify().getRocketMq().getTag()).isEqualTo("mail-meta");
     }
 
     @Test
     void bindsKebabCaseNameServerProperty() {
-        AppProperties properties = bind(Map.of(
-                "app.notify.rocketmq.name-server", "rocketmq-namesrv:9876"));
+        AppProperties properties =
+                bind(Map.of("app.notify.rocketmq.name-server", "rocketmq-namesrv:9876"));
 
         assertThat(properties.getNotify().getRocketMq().getNameServer())
                 .isEqualTo("rocketmq-namesrv:9876");
@@ -55,11 +55,13 @@ class AppPropertiesTest {
 
     @Test
     void bindsNestedPropertiesAcrossSections() {
-        AppProperties properties = bind(Map.of(
-                "app.smtp.port", "2526",
-                "app.smtp.max-message-size", "1048576",
-                "app.notify.rocketmq.topic", "custom_topic",
-                "app.notify.rocketmq.send-timeout-ms", "5000"));
+        AppProperties properties =
+                bind(
+                        Map.of(
+                                "app.smtp.port", "2526",
+                                "app.smtp.max-message-size", "1048576",
+                                "app.notify.rocketmq.topic", "custom_topic",
+                                "app.notify.rocketmq.send-timeout-ms", "5000"));
 
         assertThat(properties.getSmtp().getPort()).isEqualTo(2526);
         assertThat(properties.getSmtp().getMaxMessageSize()).isEqualTo(1048576);
