@@ -31,7 +31,7 @@ jobs:
         run: ./mvnw -B -ntp verify
 
       - name: Upload JaCoCo coverage reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: jacoco-reports
