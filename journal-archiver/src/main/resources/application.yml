@@ -40,6 +40,8 @@ app:
     # extract the embedded original message (message/rfc822 part) instead of storing the journal wrapper
     extract-original-attachment: true
     # generate a Message-Id when the original message has none, so the archive id stays unique
+    # when false, a missing Message-Id is not stored and the archive id falls back to a content
+    # digest so different emails without Message-Ids do not overwrite each other
     generate-message-id-if-missing: true
     # treat an email as journal format when it carries Exchange journal report headers
     detect-by-header: true
@@ -48,6 +50,13 @@ app:
     # how the "sender" field is resolved: header (Sender header, fallback From),
     # envelope (SMTP MAIL FROM), or from (always the From address)
     sender-resolution: header
+    # collect only emails whose sender/from/to/cc matches one of the listed mailboxes.
+    # empty list disables that condition; the four conditions are combined with AND.
+    filter:
+      sender-emails: []
+      from-emails: []
+      to-emails: []
+      cc-emails: []
   processing:
     core-pool-size: 2
     max-pool-size: 8

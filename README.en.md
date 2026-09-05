@@ -54,7 +54,7 @@ To build and test locally:
 ./mvnw -B clean verify
 ```
 
-The project ships with 86 unit tests across all modules.
+The project ships with 106 unit tests across all modules.
 
 ### Configuration
 

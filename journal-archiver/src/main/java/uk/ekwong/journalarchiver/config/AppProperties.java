@@ -16,6 +16,8 @@
 
 package uk.ekwong.journalarchiver.config;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "app")
@@ -157,6 +159,7 @@ public class AppProperties {
         private boolean detectByHeader = true;
         private boolean detectByRfc822Attachment = true;
         private String senderResolution = "header";
+        private Filter filter = new Filter();
 
         public boolean isExtractOriginalAttachment() {
             return extractOriginalAttachment;
@@ -196,6 +199,58 @@ public class AppProperties {
 
         public void setSenderResolution(String senderResolution) {
             this.senderResolution = senderResolution;
+        }
+
+        public Filter getFilter() {
+            return filter;
+        }
+
+        public void setFilter(Filter filter) {
+            this.filter = filter;
+        }
+
+        /**
+         * Collection filters applied to the original email before it is archived. Each configured
+         * list is an allowlist of mailboxes; a list with no values disables that filter. Matching
+         * is case-insensitive and ignores display names / surrounding angle brackets.
+         */
+        public static class Filter {
+            private List<String> senderEmails = new ArrayList<>();
+            private List<String> fromEmails = new ArrayList<>();
+            private List<String> toEmails = new ArrayList<>();
+            private List<String> ccEmails = new ArrayList<>();
+
+            public List<String> getSenderEmails() {
+                return senderEmails;
+            }
+
+            public void setSenderEmails(List<String> senderEmails) {
+                this.senderEmails = senderEmails;
+            }
+
+            public List<String> getFromEmails() {
+                return fromEmails;
+            }
+
+            public void setFromEmails(List<String> fromEmails) {
+                this.fromEmails = fromEmails;
+            }
+
+            public List<String> getToEmails() {
+                return toEmails;
+            }
+
+            public void setToEmails(List<String> toEmails) {
+                this.toEmails = toEmails;
+            }
+
+            public List<String> getCcEmails() {
+                return ccEmails;
+            }
+
+            public void setCcEmails(List<String> ccEmails) {
+                this.ccEmails = ccEmails;
+            }
         }
     }
 

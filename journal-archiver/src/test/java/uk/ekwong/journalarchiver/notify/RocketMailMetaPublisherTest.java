@@ -20,7 +20,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -30,6 +32,13 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.client.producer.SendResult;
@@ -109,6 +118,46 @@ class RocketMailMetaPublisherTest {
                 .thenThrow(new MQClientException("name server unreachable", null));
 
         assertThat(publisher.publish(sampleInfo())).isFalse();
+    }
+
+    @Test
+    void startsProducerOnlyOnceForConcurrentFirstPublishes() throws Exception {
+        AtomicInteger startCount = new AtomicInteger();
+        doAnswer(
+                        invocation -> {
+                            startCount.incrementAndGet();
+                            Thread.sleep(200);
+                            return null;
+                        })
+                .when(producer)
+                .start();
+        when(producer.send(any(Message.class), anyLong())).thenReturn(mock(SendResult.class));
+        AppProperties properties = new AppProperties();
+        RocketMailMetaPublisher publisher =
+                new RocketMailMetaPublisher(producer, objectMapper, properties);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch go = new CountDownLatch(1);
+        Callable<Boolean> publish =
+                () -> {
+                    ready.countDown();
+                    go.await();
+                    return publisher.publish(sampleInfo());
+                };
+        try {
+            Future<Boolean> first = executor.submit(publish);
+            Future<Boolean> second = executor.submit(publish);
+            ready.await(5, TimeUnit.SECONDS);
+            go.countDown();
+            assertThat(first.get(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(second.get(5, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertThat(startCount.get()).isEqualTo(1);
+        verify(producer, times(2)).send(any(Message.class), anyLong());
     }
 
     private JournalEmailInfo sampleInfo() {

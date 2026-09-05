@@ -103,13 +103,15 @@ public class RocketMailMetaPublisher implements MailMetaPublisher {
 
     /**
      * Starts the producer on first use. {@code start()} is only valid from the CREATE_JUST state,
-     * so we check the current state first (calling it on a running producer would throw).
+     * so we check the current state first (calling it on a running producer would throw). The
+     * method is synchronized so concurrent first publishes cannot start the same producer twice.
      */
-    private void ensureStarted() throws MQClientException {
-        if (!started) {
-            producer.start();
-            started = true;
-            log.info("RocketMQ producer started");
+    private synchronized void ensureStarted() throws MQClientException {
+        if (started) {
+            return;
         }
+        producer.start();
+        started = true;
+        log.info("RocketMQ producer started");
     }
 }

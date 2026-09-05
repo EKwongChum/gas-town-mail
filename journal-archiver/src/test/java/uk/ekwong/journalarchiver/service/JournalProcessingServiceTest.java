@@ -31,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
+import org.bson.Document;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -67,8 +68,11 @@ class JournalProcessingServiceTest {
                 .process(raw, "postmaster@corp.local", List.of("journal@archive.local"), null);
 
         verify(storage).store(eq(expectedId), any(byte[].class));
+        ArgumentCaptor<Update> updateCaptor = ArgumentCaptor.forClass(Update.class);
         verify(mongoTemplate)
-                .upsert(any(Query.class), any(Update.class), eq(JournalEmailInfo.class));
+                .upsert(any(Query.class), updateCaptor.capture(), eq(JournalEmailInfo.class));
+        Document set = (Document) updateCaptor.getValue().getUpdateObject().get("$set");
+        assertThat(set).containsEntry("objectKey", expectedId);
         verify(publisher).publish(saved);
         verifyNoInteractions(deadLetterStore);
     }
@@ -109,6 +113,41 @@ class JournalProcessingServiceTest {
         service(properties(1, 0)).process(raw, "alice@example.com", List.of(), null);
 
         verifyNoInteractions(mongoTemplate, storage, publisher, deadLetterStore);
+    }
+
+    @Test
+    void skipsJournalEmailThatDoesNotPassCollectionFilter() {
+        byte[] raw = TestEmails.journalReport().getBytes(StandardCharsets.UTF_8);
+        AppProperties props = properties(1, 0);
+        props.getJournal().getFilter().setSenderEmails(List.of("someone@example.com"));
+
+        service(props).process(raw, "postmaster@corp.local", List.of(), null);
+
+        verifyNoInteractions(mongoTemplate, storage, publisher, deadLetterStore);
+    }
+
+    @Test
+    void archivesJournalEmailWhenAllCollectionFiltersPass() {
+        byte[] raw = TestEmails.journalReport().getBytes(StandardCharsets.UTF_8);
+        AppProperties props = properties(1, 0);
+        props.getJournal().getFilter().setSenderEmails(List.of("alice@example.com"));
+        props.getJournal().getFilter().setFromEmails(List.of("alice@example.com"));
+        props.getJournal().getFilter().setToEmails(List.of("bob@example.com"));
+        props.getJournal().getFilter().setCcEmails(List.of("carol@example.com"));
+        String expectedId =
+                EmailIdGenerator.generate(
+                        "Alice <alice@example.com>", "<original-123@example.com>");
+        JournalEmailInfo saved = info(expectedId);
+        when(mongoTemplate.findById(expectedId, JournalEmailInfo.class)).thenReturn(saved);
+        when(publisher.publish(saved)).thenReturn(true);
+
+        service(props).process(raw, "postmaster@corp.local", List.of(), null);
+
+        verify(storage).store(eq(expectedId), any(byte[].class));
+        verify(mongoTemplate)
+                .upsert(any(Query.class), any(Update.class), eq(JournalEmailInfo.class));
+        verify(publisher).publish(saved);
+        verifyNoInteractions(deadLetterStore);
     }
 
     @Test
@@ -158,6 +197,48 @@ class JournalProcessingServiceTest {
                 .endsWith("@journal-archiver.local>");
     }
 
+    @Test
+    void avoidsCollisionsWhenGenerationDisabledAndMessageIdMissing() {
+        when(mongoTemplate.findById(anyString(), eq(JournalEmailInfo.class)))
+                .thenAnswer(
+                        invocation -> {
+                            String id = invocation.getArgument(0);
+                            JournalEmailInfo info = new JournalEmailInfo();
+                            info.setId(id);
+                            info.setObjectKey(id);
+                            return info;
+                        });
+        when(publisher.publish(any(JournalEmailInfo.class))).thenReturn(true);
+        AppProperties props = properties(1, 0);
+        props.getJournal().setGenerateMessageIdIfMissing(false);
+
+        service(props)
+                .process(
+                        journalReportWithoutMessageId("first unique body"),
+                        "postmaster@corp.local",
+                        List.of(),
+                        null);
+        service(props)
+                .process(
+                        journalReportWithoutMessageId("second unique body"),
+                        "postmaster@corp.local",
+                        List.of(),
+                        null);
+
+        ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(storage, times(2)).store(keyCaptor.capture(), any(byte[].class));
+        assertThat(keyCaptor.getAllValues()).doesNotHaveDuplicates();
+        verifyNoInteractions(deadLetterStore);
+    }
+
+    private byte[] journalReportWithoutMessageId(String body) {
+        String report =
+                TestEmails.journalReport()
+                        .replace("Message-ID: <original-123@example.com>\r\n", "")
+                        .replace("Hello Bob, please review the quarterly numbers.", body);
+        return report.getBytes(StandardCharsets.UTF_8);
+    }
+
     private JournalProcessingService service(AppProperties properties) {
         return new JournalProcessingService(
                 new JournalDetector(),
@@ -167,6 +248,7 @@ class JournalProcessingServiceTest {
                 storage,
                 publisher,
                 deadLetterStore,
+                new JournalMailFilter(),
                 properties);
     }
 

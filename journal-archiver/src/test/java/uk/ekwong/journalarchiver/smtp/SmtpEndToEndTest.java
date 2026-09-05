@@ -50,6 +50,7 @@ import uk.ekwong.journalarchiver.config.AppProperties;
 import uk.ekwong.journalarchiver.model.JournalEmailInfo;
 import uk.ekwong.journalarchiver.notify.MailMetaPublisher;
 import uk.ekwong.journalarchiver.service.DeadLetterStore;
+import uk.ekwong.journalarchiver.service.JournalMailFilter;
 import uk.ekwong.journalarchiver.service.JournalProcessingService;
 import uk.ekwong.mailcommon.mail.EmailDetailsExtractor;
 import uk.ekwong.mailcommon.mail.EmailIdGenerator;
@@ -77,6 +78,7 @@ class SmtpEndToEndTest {
                         storage,
                         publisher,
                         deadLetterStore,
+                        new JournalMailFilter(),
                         properties);
 
         String expectedId =
@@ -158,6 +160,7 @@ class SmtpEndToEndTest {
                         storage,
                         publisher,
                         deadLetterStore,
+                        new JournalMailFilter(),
                         properties);
 
         SMTPServer server =

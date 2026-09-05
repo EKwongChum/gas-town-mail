@@ -68,4 +68,25 @@ class AppPropertiesTest {
         assertThat(properties.getNotify().getRocketMq().getTopic()).isEqualTo("custom_topic");
         assertThat(properties.getNotify().getRocketMq().getSendTimeoutMs()).isEqualTo(5000);
     }
+
+    @Test
+    void bindsJournalCollectionFilterMailboxes() {
+        AppProperties properties =
+                bind(
+                        Map.of(
+                                "app.journal.filter.sender-emails[0]", "alice@example.com",
+                                "app.journal.filter.sender-emails[1]", "bob@example.com",
+                                "app.journal.filter.from-emails[0]", "carol@example.com",
+                                "app.journal.filter.to-emails[0]", "dave@example.com",
+                                "app.journal.filter.cc-emails[0]", "erin@example.com"));
+
+        assertThat(properties.getJournal().getFilter().getSenderEmails())
+                .containsExactly("alice@example.com", "bob@example.com");
+        assertThat(properties.getJournal().getFilter().getFromEmails())
+                .containsExactly("carol@example.com");
+        assertThat(properties.getJournal().getFilter().getToEmails())
+                .containsExactly("dave@example.com");
+        assertThat(properties.getJournal().getFilter().getCcEmails())
+                .containsExactly("erin@example.com");
+    }
 }

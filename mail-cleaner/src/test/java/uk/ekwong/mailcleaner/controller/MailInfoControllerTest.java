@@ -131,6 +131,16 @@ class MailInfoControllerTest {
     }
 
     @Test
+    void deleteReturns400ForNullBody() throws Exception {
+        mockMvc.perform(
+                        post("/api/mail-info/delete")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("null"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Malformed request body"));
+    }
+
+    @Test
     void deleteReturns400ForMalformedBody() throws Exception {
         mockMvc.perform(
                         post("/api/mail-info/delete")

@@ -109,4 +109,14 @@ class ResendControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Malformed request body"));
     }
+
+    @Test
+    void returnsBadRequestForNullBody() throws Exception {
+        mockMvc.perform(
+                        post("/api/journal-emails/resend")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("null"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Malformed request body"));
+    }
 }

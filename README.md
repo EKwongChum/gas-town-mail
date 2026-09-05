@@ -203,7 +203,11 @@ Stored email object s3://journal-emails/QWxpY2UgPGFsaWNlQGV4YW1wbGUuY29tPg==_PG9
 | `app.journal.detect-by-rfc822-attachment` | `true` | 通过内嵌 `message/rfc822` 附件识别 journal |
 | `app.journal.extract-original-attachment` | `true` | 归档内嵌的原邮件，而不是 journal 外壳 |
 | `app.journal.sender-resolution` | `header` | `sender` 字段取值：`header`（Sender 头，缺省回退 From）、`envelope`（SMTP MAIL FROM）、`from`（始终用 From） |
-| `app.journal.generate-message-id-if-missing` | `true` | 原邮件缺少 Message-Id 时生成一个，保证 id 唯一 |
+| `app.journal.generate-message-id-if-missing` | `true` | 原邮件缺少 Message-Id 时生成一个；为 `false` 时不生成 Message-Id，归档 id 改用正文内容摘要，避免同 sender 的无 Message-Id 邮件互相覆盖 |
+| `app.journal.filter.sender-emails` | `[]`（空） | 只采集 sender 命中列表中任一邮箱的邮件；空列表表示不过滤 sender |
+| `app.journal.filter.from-emails` | `[]`（空） | 只采集 from 中包含列表中任一邮箱的邮件；空列表表示不过滤 from |
+| `app.journal.filter.to-emails` | `[]`（空） | 只采集 to 中包含列表中任一邮箱的邮件；空列表表示不过滤 to |
+| `app.journal.filter.cc-emails` | `[]`（空） | 只采集 cc 中包含列表中任一邮箱的邮件；空列表表示不过滤 cc |
 | `app.processing.core/max/queue` | 2 / 8 / 500 | 归档处理的线程池参数 |
 | `app.processing.retry-max-attempts` | `3` | 归档失败时的最大尝试次数 |
 | `app.processing.retry-backoff-ms` | `1000` | 重试间隔（按尝试次数递增） |
@@ -304,8 +308,10 @@ curl -X POST http://localhost:8080/api/journal-emails/resend \
 
 归档流水线严格按以下顺序执行：
 
-1. `repository.save(...)` 写入 MongoDB（`_id` = `Base64(sender)_Base64(Message-Id)`）；
-2. `objectStorageService.store(id, rawEmail, subject)` 写入 S3（key = 同一个 id）；
+1. `objectStorageService.store(id, rawEmail)` 写入 S3（key = 同一个 id，
+   `Content-Type: message/rfc822`）；
+2. `mongoTemplate.upsert(...)` 写入 MongoDB（`_id` = `Base64(sender)_Base64(Message-Id)`，
+   并保存 `objectKey` = id）；
 3. 两者都成功后，`RocketMailMetaPublisher` 向 `mail_meta_topic:mail-meta` 同步发送 JSON 消息。
 
 消息的 **key（RocketMQ 消息 id）设为 MongoDB 文档 `_id`**（与 S3 对象 key 相同），
@@ -347,6 +353,9 @@ QWxpY2UgPGFsaWNlQGV4YW1wbGUuY29tPg==_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4=
 
 该值同时作为 MongoDB 文档 `_id` 和 S3 对象 key（`Content-Type: message/rfc822`）。
 
+> 原邮件没有 `Message-Id` 且 `app.journal.generate-message-id-if-missing` 为 `false` 时，
+> 第二段改用原邮件原始字节的 SHA-256 摘要，避免同一 sender 的多封无 Message-Id 邮件互相覆盖。
+
 ### journal 格式识别
 
 Exchange journal report 的典型特征（参考 Microsoft 文档）：
@@ -367,6 +376,28 @@ Exchange journal report 的典型特征（参考 Microsoft 文档）：
 按 RFC 5322 语义，`sender` 优先取原邮件的 `Sender` 头，缺省回退到 `From` 地址；
 SMTP 信封发件人（MAIL FROM）单独存入 MongoDB 的 `envelopeSender` 字段。
 如需直接用信封发件人作为 `sender`，可设置 `app.journal.sender-resolution: envelope`。
+
+### 采集过滤
+
+可在 `app.journal.filter` 下分别配置 sender / from / to / cc 的邮箱采集白名单，支持多个邮箱；
+同一个字段命中列表中**任一**邮箱即可通过，四个字段之间为**与**关系。列表为空（或不配置）时，
+该字段不参与筛选。过滤发生在写入 S3 / MongoDB / 发送通知之前，不满足条件的 journal 邮件会被跳过。
+
+```yaml
+app:
+  journal:
+    filter:
+      sender-emails:
+        - alice@example.com
+        - bob@example.com
+      from-emails: []
+      to-emails:
+        - carol@example.com
+      cc-emails: []
+```
+
+匹配时忽略显示名与大小写，例如原邮件的 `From: Alice <alice@example.com>` 会被
+`from-emails: [alice@example.com]` 命中。
 
 ## mail-cleaner 应用
 
@@ -517,19 +548,21 @@ docker compose --profile app up -d --build mail-mcp-server
 ./mvnw test     # 在项目根目录运行，构建全部模块
 ```
 
-共 92 个测试，按模块分布：
+共 106 个测试，按模块分布：
 
 - **mail-common（15）**：id 生成、journal 识别、原邮件提取、邮件详情解析（含中文主题解码、
   ReceivedTime、content-type、附件名）；
-- **journal-archiver（37）**：RocketMQ 通知、归档流水线（S3→Mongo→通知顺序、原子 `$inc`、
-  S3 失败重试、Mongo 失败补偿删除、缺 Message-Id 自动生成、死信落盘）、重发服务（含缺失 id 统计）、
-  HTTP 接口、真实 SMTP 握手端到端测试，以及 SMTP 健康指示器、统一异常处理、`AppProperties`
+- **journal-archiver（50）**：RocketMQ 通知（含 producer 并发首次启动）、归档流水线
+  （S3→Mongo→通知顺序、原子 `$inc`、objectKey 落库、S3 失败重试、Mongo 失败补偿删除、
+  缺 Message-Id 自动生成/内容摘要兜底、死信落盘）、重发服务（含缺失 id 统计与 null body 400）、
+  采集过滤（sender/from/to/cc 白名单、与关系、大小写与显示名匹配）、HTTP 接口、真实 SMTP
+  握手端到端测试，以及 SMTP 健康指示器、统一异常处理、`AppProperties`
   配置绑定（含 `name-server` kebab 属性）、RocketMQ producer 装配、SMTP 消息捕获与超限拒绝、
   OpenAPI 元数据；
-- **mail-cleaner（27）**：消费成功/失败重投、批量消息部分失败、S3 读取 + 邮件解析 + 写入
+- **mail-cleaner（28）**：消费成功/失败重投、批量消息部分失败、S3 读取 + 邮件解析 + 写入
   `mail_info` 文档，以及 RocketMQ 健康指示器、`CleanerProperties` 绑定、清洗服务
   （无效载荷、objectKey 读取、索引复用）、批量删除（存在/缺失 id、去重、空请求与数量上限、
-  HTTP 400 处理）、原件下载（读取、未找到 404、空 id 400、HTTP 响应头）、
+  HTTP 400/null body 处理）、原件下载（读取、未找到 404、空 id 400、HTTP 响应头）、
   OpenAPI 元数据等用例；
 - **mail-mcp-server（13）**：ES 查询服务（分页搜索、页大小上限、计数、按 id 查询）、
   MCP 工具（参数解析、默认分页、按 id 查询、计数）、MCP Server 装配、OpenAPI 文档生成。

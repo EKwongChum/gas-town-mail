@@ -22,7 +22,10 @@ import jakarta.mail.internet.MimeMessage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.SocketAddress;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
@@ -61,6 +64,7 @@ public class JournalProcessingService {
     private final ObjectStorageService objectStorageService;
     private final MailMetaPublisher mailMetaPublisher;
     private final DeadLetterStore deadLetterStore;
+    private final JournalMailFilter journalMailFilter;
     private final AppProperties properties;
 
     public JournalProcessingService(
@@ -71,6 +75,7 @@ public class JournalProcessingService {
             ObjectStorageService objectStorageService,
             MailMetaPublisher mailMetaPublisher,
             DeadLetterStore deadLetterStore,
+            JournalMailFilter journalMailFilter,
             AppProperties properties) {
         this.journalDetector = journalDetector;
         this.originalEmailExtractor = originalEmailExtractor;
@@ -79,6 +84,7 @@ public class JournalProcessingService {
         this.objectStorageService = objectStorageService;
         this.mailMetaPublisher = mailMetaPublisher;
         this.deadLetterStore = deadLetterStore;
+        this.journalMailFilter = journalMailFilter;
         this.properties = properties;
     }
 
@@ -139,17 +145,35 @@ public class JournalProcessingService {
         EmailDetails details =
                 emailDetailsExtractor.extract(
                         original.message(), envelopeSender, journalConfig.getSenderResolution());
+        if (!journalMailFilter.accepts(details, journalConfig)) {
+            log.info(
+                    "Skipping journal email that does not match collection filters: sender={}, "
+                            + "from={}, to={}, cc={}, envelope sender={}",
+                    details.sender(),
+                    details.from(),
+                    details.to(),
+                    details.cc(),
+                    envelopeSender);
+            return;
+        }
 
         String messageId = details.messageId();
-        if (isBlank(messageId) && journalConfig.isGenerateMessageIdIfMissing()) {
+        boolean missingMessageId = isBlank(messageId);
+        if (missingMessageId && journalConfig.isGenerateMessageIdIfMissing()) {
             // Note: a message without a Message-Id gets a fresh id per archive
             // attempt; a later re-archive of the same message will therefore
             // produce a different archive id. Within one attempt the
             // S3-compensation guarantees only one artifact survives.
             messageId = "<" + UUID.randomUUID() + "@journal-archiver.local>";
             log.info("Original message has no Message-Id; generated {}", messageId);
+        } else if (missingMessageId) {
+            log.warn(
+                    "Original message has no Message-Id and generation is disabled; "
+                            + "using a content digest as the archive id suffix");
         }
-        String id = EmailIdGenerator.generate(details.sender(), messageId);
+        String archiveIdSuffix =
+                isBlank(messageId) ? contentDigestMessageId(original.raw()) : messageId;
+        String id = EmailIdGenerator.generate(details.sender(), archiveIdSuffix);
 
         // Object storage first: it is idempotent (same key overwrites), so
         // retries cannot create duplicates; if the MongoDB write then fails we
@@ -183,6 +207,16 @@ public class JournalProcessingService {
                 Session.getInstance(new Properties()), new ByteArrayInputStream(raw));
     }
 
+    /** Returns a deterministic, content-derived suffix for emails without a Message-Id. */
+    private String contentDigestMessageId(byte[] raw) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(raw);
+            return "<" + HexFormat.of().formatHex(digest) + "@journal-archiver.local>";
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available", e);
+        }
+    }
+
     private JournalEmailInfo saveMetadata(
             String id,
             EmailDetails details,
@@ -201,6 +235,7 @@ public class JournalProcessingService {
         update.set("cc", details.cc());
         update.set("subject", details.subject());
         update.set("messageId", messageId);
+        update.set("objectKey", id);
         update.set("envelopeSender", envelopeSender);
         update.set("recipients", recipients);
         update.set("clientAddress", clientAddress == null ? null : clientAddress.toString());
