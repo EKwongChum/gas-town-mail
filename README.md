@@ -26,6 +26,7 @@
   1. 订阅 RocketMQ `mail_meta_topic`；
   2. 收到消息后从对象存储读取邮件本体，解析出 sender / from / to / cc / Message-Id / ReceivedTime /
      subject / content-type / 所有附件名称，写入 **Elasticsearch** 的 `mail_info` 索引。
+  3. 提供 HTTP 接口按归档 id 从对象存储**下载邮件原件（.eml）**。
 - **mail-mcp-server（MCP 查询应用）**：
   1. 基于 Spring MCP 系列依赖（`mcp-spring-webmvc`）提供**标准 MCP Streamable HTTP 接口**（`/mcp`）；
   2. 通过 MCP 工具从 **Elasticsearch** `mail_info` 索引查询归档邮件元数据
@@ -152,7 +153,8 @@ java -jar mail-mcp-server/target/mail-mcp-server-0.1.0.jar
 | mail-cleaner（8081） | `http://localhost:8081/v3/api-docs` | `http://localhost:8081/swagger-ui.html` |
 | mail-mcp-server（8082） | `http://localhost:8082/v3/api-docs` | `http://localhost:8082/swagger-ui.html` |
 
-Swagger UI 可直接在页面上调试 REST 接口（journal-archiver 的重发接口、mail-cleaner 的批量删除接口；
+Swagger UI 可直接在页面上调试 REST 接口（journal-archiver 的重发接口、mail-cleaner 的批量删除
+与原邮件下载接口；
 mail-mcp-server 主要暴露标准 MCP 端点 `/mcp`，文档化在 OpenAPI 中）。
 
 > 注意：所有应用都依赖 `mail-common`，请始终从根目录执行 `mvn clean package`（reactor 构建），
@@ -446,6 +448,21 @@ curl -X POST http://localhost:8081/api/mail-info/delete \
   -d '{"ids":["id-1","id-2"]}'
 ```
 
+### HTTP 原件下载接口
+
+`GET /api/mail-info/original?id=<archive-id>`，按归档 id（即 MongoDB `_id` / S3 对象 key / ES
+文档 id）返回 S3 中的邮件原始字节，响应 `Content-Type: message/rfc822`，并通过
+`Content-Disposition: attachment` 以 `.eml` 文件名触发下载；对象不存在时返回 `404`。
+
+> 归档 id 使用标准 Base64，可能包含 `+`、`/`、`=` 等保留字符，拼接 URL 时请对 id 做
+> URL 编码（例如 `+` 应编码为 `%2B`）。
+
+调用示例：
+
+```bash
+curl -OJ "http://localhost:8081/api/mail-info/original?id=QWxpY2UgPGFsaWNlQGV4YW1wbGUuY29tPg==_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4="
+```
+
 ## mail-mcp-server 应用
 
 基于 **JDK 17 / Spring Boot 3.4** 的 Spring MCP（Model Context Protocol）服务，
@@ -500,7 +517,7 @@ docker compose --profile app up -d --build mail-mcp-server
 ./mvnw test     # 在项目根目录运行，构建全部模块
 ```
 
-共 86 个测试，按模块分布：
+共 92 个测试，按模块分布：
 
 - **mail-common（15）**：id 生成、journal 识别、原邮件提取、邮件详情解析（含中文主题解码、
   ReceivedTime、content-type、附件名）；
@@ -509,10 +526,11 @@ docker compose --profile app up -d --build mail-mcp-server
   HTTP 接口、真实 SMTP 握手端到端测试，以及 SMTP 健康指示器、统一异常处理、`AppProperties`
   配置绑定（含 `name-server` kebab 属性）、RocketMQ producer 装配、SMTP 消息捕获与超限拒绝、
   OpenAPI 元数据；
-- **mail-cleaner（21）**：消费成功/失败重投、批量消息部分失败、S3 读取 + 邮件解析 + 写入
+- **mail-cleaner（27）**：消费成功/失败重投、批量消息部分失败、S3 读取 + 邮件解析 + 写入
   `mail_info` 文档，以及 RocketMQ 健康指示器、`CleanerProperties` 绑定、清洗服务
   （无效载荷、objectKey 读取、索引复用）、批量删除（存在/缺失 id、去重、空请求与数量上限、
-  HTTP 400 处理）、OpenAPI 元数据等用例；
+  HTTP 400 处理）、原件下载（读取、未找到 404、空 id 400、HTTP 响应头）、
+  OpenAPI 元数据等用例；
 - **mail-mcp-server（13）**：ES 查询服务（分页搜索、页大小上限、计数、按 id 查询）、
   MCP 工具（参数解析、默认分页、按 id 查询、计数）、MCP Server 装配、OpenAPI 文档生成。
 

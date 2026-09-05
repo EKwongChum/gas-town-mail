@@ -21,12 +21,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import uk.ekwong.mailcleaner.service.OriginalEmailNotFoundException;
 
 /**
- * Uniform error responses: {@code 400} for bad requests and {@code 500} with a generic message for
- * unexpected failures (details go to the logs only).
+ * Uniform error responses: {@code 400} for bad requests, {@code 404} for missing original emails
+ * and {@code 500} with a generic message for unexpected failures (details go to the logs only).
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -42,6 +44,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleUnreadableBody(HttpMessageNotReadableException e) {
         return ResponseEntity.badRequest().body(new ApiError("Malformed request body"));
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiError> handleMissingParameter(
+            MissingServletRequestParameterException e) {
+        return ResponseEntity.badRequest()
+                .body(new ApiError("Missing required parameter '" + e.getParameterName() + "'"));
+    }
+
+    @ExceptionHandler(OriginalEmailNotFoundException.class)
+    public ResponseEntity<ApiError> handleOriginalEmailNotFound(OriginalEmailNotFoundException e) {
+        log.warn("Original email not found: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiError(e.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

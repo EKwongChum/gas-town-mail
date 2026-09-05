@@ -39,12 +39,15 @@ public class OpenApiConfig {
                                 .description(
                                         "Consumes mail_meta_topic notifications, reads the email from object storage, "
                                                 + "and indexes its metadata into the Elasticsearch mail_info index. The HTTP "
-                                                + "endpoint batch-deletes documents from the index by id."))
+                                                + "endpoints batch-delete documents from the index by id and download the "
+                                                + "original email as .eml from object storage."))
                 .tags(
                         java.util.List.of(
                                 new Tag()
                                         .name("Mail info management")
                                         .description(
-                                                "Manage documents in the Elasticsearch mail_info index")));
+                                                "Manage archived emails: delete Elasticsearch "
+                                                        + "mail_info documents and download original "
+                                                        + ".eml content from object storage")));
     }
 }

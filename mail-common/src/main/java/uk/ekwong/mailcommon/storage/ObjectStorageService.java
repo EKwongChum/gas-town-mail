@@ -18,6 +18,7 @@ package uk.ekwong.mailcommon.storage;
 
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import uk.ekwong.mailcommon.config.S3Properties;
@@ -98,6 +100,18 @@ public class ObjectStorageService {
         } catch (IOException e) {
             throw new IllegalStateException(
                     "Failed to read object s3://" + bucket + "/" + objectKey, e);
+        }
+    }
+
+    /**
+     * Reads the raw email object bytes, or returns empty when no object exists with the given key.
+     */
+    public Optional<byte[]> readIfPresent(String objectKey) {
+        try {
+            return Optional.of(read(objectKey));
+        } catch (NoSuchKeyException e) {
+            log.warn("Email object s3://{}/{} does not exist", bucket, objectKey);
+            return Optional.empty();
         }
     }
 
