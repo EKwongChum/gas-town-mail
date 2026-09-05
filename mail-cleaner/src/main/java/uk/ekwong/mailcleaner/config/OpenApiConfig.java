@@ -35,7 +35,7 @@ public class OpenApiConfig {
                 .info(
                         new Info()
                                 .title("mail-cleaner API")
-                                .version("0.1.0")
+                                .version("1.0.0")
                                 .description(
                                         "Consumes mail_meta_topic notifications, reads the email from object storage, "
                                                 + "and indexes its metadata into the Elasticsearch mail_info index. The HTTP "

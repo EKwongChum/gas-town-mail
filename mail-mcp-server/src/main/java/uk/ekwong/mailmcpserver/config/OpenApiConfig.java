@@ -83,7 +83,7 @@ public class OpenApiConfig {
                 .info(
                         new Info()
                                 .title("mail-mcp-server API")
-                                .version("0.1.0")
+                                .version("1.0.0")
                                 .description(
                                         "Spring MCP (Model Context Protocol) server that queries archived journal "
                                                 + "email metadata from the Elasticsearch mail_info index. MCP clients connect to "

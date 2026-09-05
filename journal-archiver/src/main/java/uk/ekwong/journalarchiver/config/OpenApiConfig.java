@@ -35,7 +35,7 @@ public class OpenApiConfig {
                 .info(
                         new Info()
                                 .title("journal-archiver API")
-                                .version("0.1.0")
+                                .version("1.0.0")
                                 .description(
                                         "Receives journal emails via embedded SMTP, archives metadata into MongoDB, "
                                                 + "raw email into S3, and publishes notifications to RocketMQ. The HTTP endpoint "

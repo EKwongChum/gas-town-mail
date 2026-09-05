@@ -61,7 +61,7 @@ public class McpServerConfig {
             WebMvcStreamableServerTransportProvider transportProvider,
             MailQueryTools mailQueryTools) {
         return McpServer.sync(transportProvider)
-                .serverInfo("mail-mcp-server", "0.1.0")
+                .serverInfo("mail-mcp-server", "1.0.0")
                 .instructions(
                         "Query the archived journal email metadata in Elasticsearch (mail_info index).")
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())

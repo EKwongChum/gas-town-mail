@@ -18,7 +18,7 @@
 # parent pom and mail-common), e.g.:
 #   docker build -f mail-cleaner/Dockerfile -t mail-cleaner .
 
-ARG VERSION=0.1.0
+ARG VERSION=1.0.0
 ARG REVISION=unknown
 
 # ---- build stage ----

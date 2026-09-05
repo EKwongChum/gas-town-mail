@@ -137,7 +137,7 @@ curl -X POST http://localhost:8082/mcp \
 mvn clean package
 
 # 启动（默认端口 8082，ES 默认 localhost:9200）
-java -jar mail-mcp-server/target/mail-mcp-server-0.1.0.jar
+java -jar mail-mcp-server/target/mail-mcp-server-1.0.0.jar
 ```
 
 ### Docker（docker compose）
