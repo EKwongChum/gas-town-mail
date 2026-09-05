@@ -5,7 +5,6 @@
 [![CI](https://github.com/EKwongChum/gas-town-mail/actions/workflows/ci.yml/badge.svg)]()
 [![Release](https://img.shields.io/github/v/release/EKwongChum/gas-town-mail)]()
 
-> **Status**: experimental. This project has not been validated in production; use it with care.
 
 Gas Town Mail is a journal email archiving and search platform built with **JDK 17 / Spring Boot
 3.4**. It is organized as one Maven reactor with three runnable applications and a shared module:
