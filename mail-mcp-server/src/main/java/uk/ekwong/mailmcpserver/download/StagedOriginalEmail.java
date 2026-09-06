@@ -14,21 +14,15 @@
  * limitations under the License.
  */
 
-package uk.ekwong.mailcleaner.config;
+package uk.ekwong.mailmcpserver.download;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.nio.file.Path;
 
-import io.swagger.v3.oas.models.OpenAPI;
-import org.junit.jupiter.api.Test;
-
-class OpenApiConfigTest {
-
-    @Test
-    void providesOpenApiMetadata() {
-        OpenAPI api = new OpenApiConfig().mailCleanerOpenApi();
-
-        assertThat(api.getInfo().getTitle()).isEqualTo("mail-cleaner API");
-        assertThat(api.getInfo().getVersion()).isEqualTo("1.1.0");
-        assertThat(api.getTags()).extracting(tag -> tag.getName()).contains("Mail info management");
-    }
-}
+/**
+ * A staged original email file waiting to be packed into the zip archive.
+ *
+ * @param archiveId archive id of the email (MongoDB id / object storage key)
+ * @param file temporary {@code .eml} file on the server
+ * @param zipEntryName entry name used inside the resulting zip archive
+ */
+public record StagedOriginalEmail(String archiveId, Path file, String zipEntryName) {}

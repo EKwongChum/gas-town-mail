@@ -3,13 +3,15 @@
 基于 **JDK 17 / Spring Boot 3.4** 的 Spring MCP（Model Context Protocol）服务，
 使用 Spring MCP 系列依赖 `io.modelcontextprotocol.sdk:mcp-spring-webmvc` 提供
 **标准 MCP Streamable HTTP 接口**，供 LLM / MCP 客户端查询 Elasticsearch
-`mail_info` 索引中的归档邮件元数据。
+`mail_info` 索引中的归档邮件元数据；同时提供普通 HTTP 接口，将多封邮件原件
+（`.eml`）从对象存储取出后打包为 `.zip` 下载。
 
 ## 一、服务端点
 
 | 端点 | 方法 | 说明 |
 | --- | --- | --- |
 | `/mcp` | POST | MCP Streamable HTTP 协议端点（标准 MCP 服务器接口） |
+| `/api/mail-originals/download` | POST | 按归档 id 批量下载邮件原件，返回 `.zip` |
 | `/v3/api-docs` | GET | OpenAPI JSON 文档 |
 | `/swagger-ui.html` | GET | Swagger UI 可视化文档 |
 | `/actuator/health` | GET | 健康检查 |
@@ -130,14 +132,45 @@ curl -X POST http://localhost:8082/mcp \
 > 提示：Streamable HTTP 服务端返回 `Mcp-Session-Id` 响应头，后续同会话请求需要带上该头
 > （`-H 'Mcp-Session-Id: <id>'`）。生产环境建议在网关层为该端点配置鉴权。
 
-## 四、构建与运行
+## 四、HTTP 批量下载接口（.eml → .zip）
+
+`POST /api/mail-originals/download`，请求体为 JSON：
+
+```json
+{
+  "ids": ["id-1", "id-2", "id-3"]
+}
+```
+
+流程：
+
+1. 按归档 id（MongoDB `_id` / S3 对象 key）逐个从对象存储读取邮件原件；
+2. 写入服务器临时目录（默认 `<java.io.tmpdir>/mail-mcp-server/originals`），
+   每个文件从写入起单独计时，最多保留 30 分钟（可配置）后自动删除；
+3. 将所有 `.eml` 流式压缩为 `mail-originals.zip` 返回（`Content-Type: application/zip`）。
+
+规则与错误：
+
+- 空白 id 会被忽略、重复 id 会去重；请求为空或超过 1000 个 id 返回 `400`；
+- 任一 id 在对象存储中不存在时返回 `404`，错误信息中列出缺失的 id；
+- 请求体不是合法 JSON 时返回 `400`。
+
+调用示例：
+
+```bash
+curl -OJ -X POST http://localhost:8082/api/mail-originals/download \
+  -H 'Content-Type: application/json' \
+  -d '{"ids":["id-1","id-2"]}'
+```
+
+## 五、构建与运行
 
 ```bash
 # 在项目根目录构建（会同时构建 mail-common）
 mvn clean package
 
 # 启动（默认端口 8082，ES 默认 localhost:9200）
-java -jar mail-mcp-server/target/mail-mcp-server-1.0.0.jar
+java -jar mail-mcp-server/target/mail-mcp-server-1.1.0.jar
 ```
 
 ### Docker（docker compose）
@@ -166,12 +199,16 @@ docker build -f mail-mcp-server/Dockerfile -t mail-mcp-server .
 | `server.port` | `8082` | HTTP 端口 |
 | `spring.elasticsearch.uris` | `http://localhost:9200` | Elasticsearch 地址 |
 | `app.mcp.endpoint` | `/mcp` | MCP 协议端点路径 |
+| `app.download.temp-dir` | JVM 临时目录下的 `mail-mcp-server/originals` | 暂存 `.eml` 的目录（compose 中可用 `MAIL_DOWNLOAD_TEMP_DIR` 覆盖） |
+| `app.download.file-ttl` | `30m` | 单个临时文件保留时长，到期自动删除（可用 `MAIL_DOWNLOAD_FILE_TTL` 覆盖） |
+| `app.storage.s3.*` | 同归档应用 | 读取邮件原件所需的共享 S3 配置（mail-common） |
 
-## 五、依赖说明
+## 六、依赖说明
 
 - `io.modelcontextprotocol.sdk:mcp-spring-webmvc`：Spring MCP WebMVC 传输实现
   （Streamable HTTP / SSE），版本统一在根 POM `dependencyManagement` 管理；
 - `spring-boot-starter-data-elasticsearch`：读取 `mail_info` 索引；
+- `mail-common`：共享的 S3 配置与 `ObjectStorageService`（读取邮件原件）；
 - `springdoc-openapi-starter-webmvc-ui`：生成 OpenAPI / Swagger 文档。
 
 > 版本兼容性：Spring MCP SDK 要求 Spring Framework 6.2+，因此本项目父 POM 的

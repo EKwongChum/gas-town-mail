@@ -28,7 +28,7 @@ class OpenApiConfigTest {
         OpenAPI api = new OpenApiConfig().journalArchiverOpenApi();
 
         assertThat(api.getInfo().getTitle()).isEqualTo("journal-archiver API");
-        assertThat(api.getInfo().getVersion()).isEqualTo("1.0.0");
+        assertThat(api.getInfo().getVersion()).isEqualTo("1.1.0");
         assertThat(api.getTags()).extracting(tag -> tag.getName()).contains("Notification resend");
     }
 }

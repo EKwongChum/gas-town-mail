@@ -18,7 +18,7 @@
 # parent pom and mail-common), e.g.:
 #   docker build -f mail-mcp-server/Dockerfile -t mail-mcp-server .
 
-ARG VERSION=1.0.0
+ARG VERSION=1.1.0
 ARG REVISION=unknown
 
 # ---- build stage ----
@@ -33,7 +33,7 @@ FROM eclipse-temurin:17-jre
 ARG VERSION
 ARG REVISION
 LABEL org.opencontainers.image.title="mail-mcp-server" \
-      org.opencontainers.image.description="Spring MCP server exposing Elasticsearch mail queries" \
+      org.opencontainers.image.description="Spring MCP server exposing Elasticsearch mail queries and original-email zip downloads" \
       org.opencontainers.image.source="https://github.com/EKwongChum/gas-town-mail" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.version="${VERSION}" \

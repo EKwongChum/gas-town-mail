@@ -14,21 +14,16 @@
  * limitations under the License.
  */
 
-package uk.ekwong.mailcleaner.config;
+package uk.ekwong.mailmcpserver.download;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
 
-import io.swagger.v3.oas.models.OpenAPI;
-import org.junit.jupiter.api.Test;
+/** Thrown when one or more requested original emails do not exist in object storage. */
+public class OriginalMailNotFoundException extends RuntimeException {
 
-class OpenApiConfigTest {
-
-    @Test
-    void providesOpenApiMetadata() {
-        OpenAPI api = new OpenApiConfig().mailCleanerOpenApi();
-
-        assertThat(api.getInfo().getTitle()).isEqualTo("mail-cleaner API");
-        assertThat(api.getInfo().getVersion()).isEqualTo("1.1.0");
-        assertThat(api.getTags()).extracting(tag -> tag.getName()).contains("Mail info management");
+    public OriginalMailNotFoundException(List<String> missingIds) {
+        super(
+                "No original email found in object storage for ids: "
+                        + String.join(", ", missingIds));
     }
 }

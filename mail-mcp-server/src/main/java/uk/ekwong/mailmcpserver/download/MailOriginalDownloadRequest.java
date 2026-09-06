@@ -14,21 +14,13 @@
  * limitations under the License.
  */
 
-package uk.ekwong.mailcleaner.config;
+package uk.ekwong.mailmcpserver.download;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
 
-import io.swagger.v3.oas.models.OpenAPI;
-import org.junit.jupiter.api.Test;
-
-class OpenApiConfigTest {
-
-    @Test
-    void providesOpenApiMetadata() {
-        OpenAPI api = new OpenApiConfig().mailCleanerOpenApi();
-
-        assertThat(api.getInfo().getTitle()).isEqualTo("mail-cleaner API");
-        assertThat(api.getInfo().getVersion()).isEqualTo("1.1.0");
-        assertThat(api.getTags()).extracting(tag -> tag.getName()).contains("Mail info management");
-    }
-}
+/**
+ * Request body for downloading original emails by archive id.
+ *
+ * @param ids archive ids (MongoDB id / object storage key) of the emails to download
+ */
+public record MailOriginalDownloadRequest(List<String> ids) {}

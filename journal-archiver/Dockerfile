@@ -19,7 +19,7 @@
 #   docker build -f journal-archiver/Dockerfile -t journal-archiver .
 
 # Release workflow passes VERSION (tag without "v") and REVISION (commit sha).
-ARG VERSION=1.0.0
+ARG VERSION=1.1.0
 ARG REVISION=unknown
 
 # ---- build stage ----

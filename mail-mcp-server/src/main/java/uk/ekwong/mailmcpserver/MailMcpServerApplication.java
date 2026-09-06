@@ -18,12 +18,15 @@ package uk.ekwong.mailmcpserver;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 /**
  * Spring Boot application that exposes the archived email metadata (the Elasticsearch {@code
  * mail_info} index) through a standard MCP (Model Context Protocol) server interface.
  */
-@SpringBootApplication
+// scanBasePackages also picks up the shared beans in uk.ekwong.mailcommon
+@SpringBootApplication(scanBasePackages = "uk.ekwong")
+@ConfigurationPropertiesScan
 public class MailMcpServerApplication {
 
     public static void main(String[] args) {

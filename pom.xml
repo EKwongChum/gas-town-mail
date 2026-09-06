@@ -21,7 +21,7 @@
 
     <groupId>uk.ekwong</groupId>
     <artifactId>gas-town-mail</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
     <packaging>pom</packaging>
     <name>gas-town-mail</name>
     <description>Journal email archive platform: journal-archiver + mail-cleaner + mail-mcp-server applications</description>

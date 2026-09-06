@@ -13,7 +13,7 @@ Gas Town Mail is a journal email archiving and search platform built with **JDK 
 | --- | --- |
 | `journal-archiver` | Embedded SMTP server that receives Exchange journal reports, stores metadata in MongoDB, stores the raw email in S3-compatible object storage, then publishes a notification to RocketMQ |
 | `mail-cleaner` | RocketMQ consumer that reads each email from object storage, extracts searchable metadata, and indexes it into Elasticsearch (`mail_info`) |
-| `mail-mcp-server` | Spring MCP server (Streamable HTTP on `/mcp`) exposing Elasticsearch queries as MCP tools |
+| `mail-mcp-server` | Spring MCP server (Streamable HTTP on `/mcp`) exposing Elasticsearch queries as MCP tools, plus an HTTP endpoint that downloads selected original `.eml` files as a `.zip` archive |
 | `mail-common` | Shared parsing, storage, and configuration code |
 
 All dependency versions are managed once in the root [pom.xml](pom.xml).
@@ -53,7 +53,7 @@ To build and test locally:
 ./mvnw -B clean verify
 ```
 
-The project ships with 106 unit tests across all modules.
+The project ships with 120 unit tests across all modules.
 
 ### Configuration
 
@@ -63,7 +63,7 @@ environment variables:
 | Variable | Purpose | Default (development only) |
 | --- | --- | --- |
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | S3/MinIO credentials | `minioadmin` / `minioadmin` |
-| `APP_STORAGE_S3_ENDPOINT` | S3-compatible endpoint | `http://localhost:9000` |
+| `APP_STORAGE_S3_ENDPOINT` | S3-compatible endpoint (archiver, cleaner and mcp download) | `http://localhost:9000` |
 | `APP_NOTIFY_ROCKETMQ_NAMESERVER` | RocketMQ name server (archiver) | `127.0.0.1:9876` |
 | `APP_ROCKETMQ_NAMESERVER` | RocketMQ name server (cleaner) | `127.0.0.1:9876` |
 | `SPRING_DATA_MONGODB_URI` | MongoDB connection string | local default |
@@ -82,6 +82,10 @@ curl -X POST http://localhost:8082/mcp \
 
 Tools: `search_mails`, `get_mail_by_id`, `count_mails`. Full tool parameters and client examples are
 in [mail-mcp-server/README.md](mail-mcp-server/README.md).
+
+`mail-mcp-server` also serves `POST /api/mail-originals/download` (`{"ids": ["id-1", "id-2"]}`),
+which reads the requested original emails from S3 into a temporary directory (each file is cleaned
+up 30 minutes later by default) and returns them as a `.zip` archive.
 
 ## Documentation
 

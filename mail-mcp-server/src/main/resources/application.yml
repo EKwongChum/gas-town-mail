@@ -19,6 +19,20 @@ app:
   mcp:
     # MCP Streamable HTTP endpoint (standard MCP server interface)
     endpoint: /mcp
+  download:
+    # Batch original-email download: temporary directory for staged .eml files
+    # (blank = <java.io.tmpdir>/mail-mcp-server/originals) and per-file TTL
+    temp-dir: ${MAIL_DOWNLOAD_TEMP_DIR:}
+    file-ttl: ${MAIL_DOWNLOAD_FILE_TTL:30m}
+  storage:
+    s3:
+      endpoint: http://localhost:9000
+      region: us-east-1
+      access-key: ${S3_ACCESS_KEY:minioadmin}
+      secret-key: ${S3_SECRET_KEY:minioadmin}
+      bucket: journal-emails
+      path-style: true
+      create-bucket-if-missing: false
 
 springdoc:
   api-docs:

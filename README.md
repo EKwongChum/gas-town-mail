@@ -28,7 +28,8 @@
 - **mail-mcp-server（MCP 查询应用）**：
   1. 基于 Spring MCP 系列依赖（`mcp-spring-webmvc`）提供**标准 MCP Streamable HTTP 接口**（`/mcp`）；
   2. 通过 MCP 工具从 **Elasticsearch** `mail_info` 索引查询归档邮件元数据
-     （关键词 / 收发件人 / Message-Id / 时间范围检索、按 id 查询、计数）。
+     （关键词 / 收发件人 / Message-Id / 时间范围检索、按 id 查询、计数）；
+  3. 提供 HTTP 接口按归档 id 从对象存储批量下载邮件原件，打包为 `.zip` 返回。
 
 三个应用通过共享模块 **mail-common** 复用邮件解析、S3 读写、ES 文档模型、公共配置等相同逻辑；
 所有依赖版本统一在根 POM 的 `dependencyManagement` 中管理。
@@ -45,7 +46,8 @@ gas-town-mail（父 POM：统一依赖版本、编译参数、插件管理）
 │   └── storage/         ObjectStorageService（S3 读写/删除）
 ├── journal-archiver     归档应用（SMTP + MongoDB + S3 + RocketMQ 生产者 + 重发接口）
 ├── mail-cleaner         清洗应用（RocketMQ 消费者 + S3 读 + Elasticsearch mail_info）
-└── mail-mcp-server      MCP 查询应用（Spring MCP 标准接口 + Elasticsearch 查询）
+└── mail-mcp-server      MCP 查询应用（Spring MCP 标准接口 + Elasticsearch 查询 +
+                         邮件原件批量 zip 下载）
 ```
 
 ## 工作流程
@@ -58,7 +60,8 @@ flowchart LR
     Archiver -->|归档成功通知| MQ[RocketMQ<br/>mail_meta_topic]
     MQ --> Cleaner["mail-cleaner<br/>(消费 + 清洗)"]
     Cleaner -->|mail_info 索引| ES[(Elasticsearch)]
-    ES --> Mcp["mail-mcp-server<br/>(MCP 查询)"]
+    S3 -. 原件下载 .-> Mcp["mail-mcp-server<br/>(MCP 查询 + zip 下载)"]
+    ES --> Mcp
     Mcp --> Client["LLM / MCP 客户端"]
 ```
 
@@ -123,7 +126,7 @@ export JAVA_HOME=/path/to/jdk17
 归档应用（HTTP 8080 / SMTP 2525）：
 
 ```bash
-java -jar journal-archiver/target/journal-archiver-1.0.0.jar
+java -jar journal-archiver/target/journal-archiver-1.1.0.jar
 # 或先安装共享模块到本地仓库，再用 spring-boot:run 调试：
 # ./mvnw install -DskipTests
 # ./mvnw -pl journal-archiver spring-boot:run
@@ -132,13 +135,13 @@ java -jar journal-archiver/target/journal-archiver-1.0.0.jar
 清洗应用（HTTP 8081 / 消费 mail_meta_topic）：
 
 ```bash
-java -jar mail-cleaner/target/mail-cleaner-1.0.0.jar
+java -jar mail-cleaner/target/mail-cleaner-1.1.0.jar
 ```
 
 MCP 查询应用（HTTP 8082 / MCP 端点 `/mcp`）：
 
 ```bash
-java -jar mail-mcp-server/target/mail-mcp-server-1.0.0.jar
+java -jar mail-mcp-server/target/mail-mcp-server-1.1.0.jar
 ```
 
 > MCP 工具的完整参数与调用示例见 [mail-mcp-server/README.md](mail-mcp-server/README.md)（接口文档）。
@@ -152,8 +155,7 @@ java -jar mail-mcp-server/target/mail-mcp-server-1.0.0.jar
 | mail-mcp-server（8082） | `http://localhost:8082/v3/api-docs` | `http://localhost:8082/swagger-ui.html` |
 
 Swagger UI 可直接在页面上调试 REST 接口（journal-archiver 的重发接口、mail-cleaner 的批量删除
-与原邮件下载接口；
-mail-mcp-server 主要暴露标准 MCP 端点 `/mcp`，文档化在 OpenAPI 中）。
+与原邮件下载接口、mail-mcp-server 的邮件原件批量 zip 下载；MCP 端点 `/mcp` 也文档化在 OpenAPI 中）。
 
 > 注意：所有应用都依赖 `mail-common`，请始终从根目录执行 `mvn clean package`（reactor 构建），
 > 或用 `java -jar` 直接运行打包产物；不要直接对单个模块执行 `mvn spring-boot:run`（未安装共享模块会解析失败）。
@@ -530,12 +532,15 @@ MCP 客户端（Claude Desktop / Cursor / 任意 MCP SDK）
 ### 运行
 
 ```bash
-# 方式一：本地 java -jar（需先 mvn clean package）
-java -jar mail-mcp-server/target/mail-mcp-server-1.0.0.jar
+# 方式一：本地 java -jar（需先 mvn clean package；读取原件需要配置 S3）
+java -jar mail-mcp-server/target/mail-mcp-server-1.1.0.jar
 
-# 方式二：docker compose（与基础设施一起，自动连接容器内 Elasticsearch）
+# 方式二：docker compose（与基础设施一起，自动连接容器内 Elasticsearch / MinIO）
 docker compose --profile app up -d --build mail-mcp-server
 ```
+
+> MCP 查询只依赖 Elasticsearch；批量 zip 下载还会从 MinIO（S3）读取邮件原件，
+> 因此 compose 中该服务已增加对 MinIO 的依赖并注入 `APP_STORAGE_S3_ENDPOINT`。
 
 > 版本说明：Spring MCP SDK 要求 Spring Framework 6.2+，因此父 POM 的 Spring Boot
 > 从 3.3.5 升级到 3.4.13（JDK 17 不变，三个应用版本统一）。
@@ -546,7 +551,7 @@ docker compose --profile app up -d --build mail-mcp-server
 ./mvnw test     # 在项目根目录运行，构建全部模块
 ```
 
-共 106 个测试，按模块分布：
+共 120 个测试，按模块分布：
 
 - **mail-common（15）**：id 生成、journal 识别、原邮件提取、邮件详情解析（含中文主题解码、
   ReceivedTime、content-type、附件名）；
@@ -562,8 +567,10 @@ docker compose --profile app up -d --build mail-mcp-server
   （无效载荷、objectKey 读取、索引复用）、批量删除（存在/缺失 id、去重、空请求与数量上限、
   HTTP 400/null body 处理）、原件下载（读取、未找到 404、空 id 400、HTTP 响应头）、
   OpenAPI 元数据等用例；
-- **mail-mcp-server（13）**：ES 查询服务（分页搜索、页大小上限、计数、按 id 查询）、
-  MCP 工具（参数解析、默认分页、按 id 查询、计数）、MCP Server 装配、OpenAPI 文档生成。
+- **mail-mcp-server（27）**：ES 查询服务（分页搜索、页大小上限、计数、按 id 查询）、
+  MCP 工具（参数解析、默认分页、按 id 查询、计数）、MCP Server 装配、OpenAPI 文档生成，
+  以及邮件原件批量 zip 下载（S3 读取→临时文件→zip 内容、缺失 id 404、空请求/超上限 400、
+  HTTP 响应头、临时文件按文件 TTL 自动清理、读取期间延迟删除、启动时清理残留文件）。
 
 ### 在容器内运行测试
 
