@@ -126,7 +126,7 @@ export JAVA_HOME=/path/to/jdk17
 归档应用（HTTP 8080 / SMTP 2525）：
 
 ```bash
-java -jar journal-archiver/target/journal-archiver-1.0.0.jar
+java -jar journal-archiver/target/journal-archiver-1.1.0.jar
 # 或先安装共享模块到本地仓库，再用 spring-boot:run 调试：
 # ./mvnw install -DskipTests
 # ./mvnw -pl journal-archiver spring-boot:run
@@ -135,13 +135,13 @@ java -jar journal-archiver/target/journal-archiver-1.0.0.jar
 清洗应用（HTTP 8081 / 消费 mail_meta_topic）：
 
 ```bash
-java -jar mail-cleaner/target/mail-cleaner-1.0.0.jar
+java -jar mail-cleaner/target/mail-cleaner-1.1.0.jar
 ```
 
 MCP 查询应用（HTTP 8082 / MCP 端点 `/mcp`）：
 
 ```bash
-java -jar mail-mcp-server/target/mail-mcp-server-1.0.0.jar
+java -jar mail-mcp-server/target/mail-mcp-server-1.1.0.jar
 ```
 
 > MCP 工具的完整参数与调用示例见 [mail-mcp-server/README.md](mail-mcp-server/README.md)（接口文档）。
@@ -533,7 +533,7 @@ MCP 客户端（Claude Desktop / Cursor / 任意 MCP SDK）
 
 ```bash
 # 方式一：本地 java -jar（需先 mvn clean package；读取原件需要配置 S3）
-java -jar mail-mcp-server/target/mail-mcp-server-1.0.0.jar
+java -jar mail-mcp-server/target/mail-mcp-server-1.1.0.jar
 
 # 方式二：docker compose（与基础设施一起，自动连接容器内 Elasticsearch / MinIO）
 docker compose --profile app up -d --build mail-mcp-server
