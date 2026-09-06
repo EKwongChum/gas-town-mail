@@ -27,7 +27,7 @@
 
     <artifactId>mail-mcp-server</artifactId>
     <name>mail-mcp-server</name>
-    <description>Spring Boot MCP (Model Context Protocol) server exposing email query tools backed by Elasticsearch</description>
+    <description>Spring Boot MCP (Model Context Protocol) server exposing email query tools backed by Elasticsearch and an HTTP endpoint for downloading original emails as a zip archive</description>
 
     <dependencies>
         <dependency>

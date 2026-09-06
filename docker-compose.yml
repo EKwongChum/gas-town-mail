@@ -107,7 +107,8 @@ services:
       APP_STORAGE_S3_ENDPOINT: http://minio:9000
       APP_ROCKETMQ_NAMESERVER: rocketmq-namesrv:9876
 
-  # MCP 查询应用：标准 MCP (Streamable HTTP) 接口，查询 Elasticsearch mail_info
+  # MCP 查询应用：标准 MCP (Streamable HTTP) 接口，查询 Elasticsearch mail_info；
+  # 同时提供批量 zip 下载接口（需读取 S3 中的邮件原件）
   mail-mcp-server:
     build:
       context: .
@@ -118,10 +119,12 @@ services:
       - app
     depends_on:
       - elasticsearch
+      - minio
     ports:
       - "8082:8082"
     environment:
       SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
+      APP_STORAGE_S3_ENDPOINT: http://minio:9000
 
 volumes:
   mongo-data:
