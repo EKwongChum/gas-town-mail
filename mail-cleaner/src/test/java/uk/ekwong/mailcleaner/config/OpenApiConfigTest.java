@@ -28,7 +28,7 @@ class OpenApiConfigTest {
         OpenAPI api = new OpenApiConfig().mailCleanerOpenApi();
 
         assertThat(api.getInfo().getTitle()).isEqualTo("mail-cleaner API");
-        assertThat(api.getInfo().getVersion()).isEqualTo("1.1.0");
+        assertThat(api.getInfo().getVersion()).isEqualTo("1.2.0");
         assertThat(api.getTags()).extracting(tag -> tag.getName()).contains("Mail info management");
     }
 }
