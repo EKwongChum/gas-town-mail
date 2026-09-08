@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import uk.ekwong.journalarchiver.config.AppProperties;
 import uk.ekwong.journalarchiver.model.JournalEmailInfo;
 import uk.ekwong.mailcommon.mail.MailMetaMessage;
+import uk.ekwong.mailcommon.trace.TraceIds;
 
 /**
  * Publishes the {@code mail_meta_topic} RocketMQ message after the email has been stored. Delivery
@@ -84,6 +85,7 @@ public class RocketMailMetaPublisher implements MailMetaPublisher {
                             tag == null || tag.isBlank() ? "" : tag,
                             info.getId(),
                             payload.getBytes(StandardCharsets.UTF_8));
+            message.putUserProperty(TraceIds.ROCKETMQ_PROPERTY, TraceIds.currentOrGenerate());
             SendResult result = producer.send(message, config.getSendTimeoutMs());
             log.info(
                     "Published mail meta notification to RocketMQ: topic={}, tag={}, key={}, msgId={}",

@@ -18,13 +18,18 @@ package uk.ekwong.mailmcpserver.mcp;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import uk.ekwong.mailcommon.es.MailInfoDocument;
 import uk.ekwong.mailmcpserver.service.EmailQueryService;
@@ -38,13 +43,19 @@ import uk.ekwong.mailmcpserver.service.MailSearchRequest;
 public class MailQueryTools {
 
     private static final String TYPE_STRING = "string";
+    private static final Logger log = LoggerFactory.getLogger(MailQueryTools.class);
 
     private final EmailQueryService queryService;
     private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
 
-    public MailQueryTools(EmailQueryService queryService, ObjectMapper objectMapper) {
+    public MailQueryTools(
+            EmailQueryService queryService,
+            ObjectMapper objectMapper,
+            MeterRegistry meterRegistry) {
         this.queryService = queryService;
         this.objectMapper = objectMapper;
+        this.meterRegistry = meterRegistry;
     }
 
     /**
@@ -103,7 +114,13 @@ public class MailQueryTools {
                 .tool(tool)
                 .callHandler(
                         (exchange, request) ->
-                                ok(queryService.search(toSearchRequest(request.arguments()))))
+                                observed(
+                                        "search_mails",
+                                        () ->
+                                                ok(
+                                                        queryService.search(
+                                                                toSearchRequest(
+                                                                        request.arguments())))))
                 .build();
     }
 
@@ -129,14 +146,19 @@ public class MailQueryTools {
         return McpServerFeatures.SyncToolSpecification.builder()
                 .tool(tool)
                 .callHandler(
-                        (exchange, request) -> {
-                            String id = stringArg(request.arguments(), "id");
-                            Optional<MailInfoDocument> document = queryService.findById(id);
-                            if (document.isPresent()) {
-                                return ok(document.get());
-                            }
-                            return error("No mail document found with id '" + id + "'");
-                        })
+                        (exchange, request) ->
+                                observed(
+                                        "get_mail_by_id",
+                                        () -> {
+                                            String id = stringArg(request.arguments(), "id");
+                                            Optional<MailInfoDocument> document =
+                                                    queryService.findById(id);
+                                            if (document.isPresent()) {
+                                                return ok(document.get());
+                                            }
+                                            return error(
+                                                    "No mail document found with id '" + id + "'");
+                                        }))
                 .build();
     }
 
@@ -176,12 +198,58 @@ public class MailQueryTools {
                 .tool(tool)
                 .callHandler(
                         (exchange, request) ->
-                                ok(
-                                        Map.of(
-                                                "count",
-                                                queryService.count(
-                                                        toSearchRequest(request.arguments())))))
+                                observed(
+                                        "count_mails",
+                                        () ->
+                                                ok(
+                                                        Map.of(
+                                                                "count",
+                                                                queryService.count(
+                                                                        toSearchRequest(
+                                                                                request
+                                                                                        .arguments()))))))
                 .build();
+    }
+
+    /**
+     * Runs one tool call with timing/metrics and a single summary log line, so every MCP invocation
+     * (including error results and exceptions) is observable without logging request content.
+     */
+    private McpSchema.CallToolResult observed(
+            String toolName, Supplier<McpSchema.CallToolResult> invocation) {
+        long startedNanos = System.nanoTime();
+        try {
+            McpSchema.CallToolResult result = invocation.get();
+            record(toolName, startedNanos, result.isError() ? "error" : "success", null);
+            return result;
+        } catch (RuntimeException e) {
+            record(toolName, startedNanos, "error", e);
+            throw e;
+        }
+    }
+
+    private void record(
+            String toolName, long startedNanos, String outcome, RuntimeException failure) {
+        Duration duration = Duration.ofNanos(System.nanoTime() - startedNanos);
+        meterRegistry.timer("mail.mcp.tool.duration", "tool", toolName).record(duration);
+        meterRegistry
+                .counter("mail.mcp.tool.calls", "tool", toolName, "outcome", outcome)
+                .increment();
+        if (failure != null) {
+            log.error(
+                    "MCP tool call failed tool={} durationMs={}",
+                    toolName,
+                    duration.toMillis(),
+                    failure);
+        } else if ("error".equals(outcome)) {
+            log.warn(
+                    "MCP tool call returned an error tool={} durationMs={}",
+                    toolName,
+                    duration.toMillis());
+        } else {
+            log.info(
+                    "MCP tool call succeeded tool={} durationMs={}", toolName, duration.toMillis());
+        }
     }
 
     private MailSearchRequest toSearchRequest(Map<String, Object> arguments) {

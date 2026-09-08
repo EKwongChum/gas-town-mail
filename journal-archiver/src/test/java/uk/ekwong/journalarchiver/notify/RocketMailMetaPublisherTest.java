@@ -45,8 +45,10 @@ import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.common.message.Message;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.MDC;
 import uk.ekwong.journalarchiver.config.AppProperties;
 import uk.ekwong.journalarchiver.model.JournalEmailInfo;
+import uk.ekwong.mailcommon.trace.TraceIds;
 
 class RocketMailMetaPublisherTest {
 
@@ -158,6 +160,25 @@ class RocketMailMetaPublisherTest {
 
         assertThat(startCount.get()).isEqualTo(1);
         verify(producer, times(2)).send(any(Message.class), anyLong());
+    }
+
+    @Test
+    void propagatesCurrentTraceIdAsRocketMqUserProperty() throws Exception {
+        AppProperties properties = new AppProperties();
+        RocketMailMetaPublisher publisher =
+                new RocketMailMetaPublisher(producer, objectMapper, properties);
+        when(producer.send(any(Message.class), anyLong())).thenReturn(mock(SendResult.class));
+        MDC.put(TraceIds.MDC_KEY, "trace-abc");
+        try {
+            assertThat(publisher.publish(sampleInfo())).isTrue();
+        } finally {
+            MDC.clear();
+        }
+
+        ArgumentCaptor<Message> messageCaptor = ArgumentCaptor.forClass(Message.class);
+        verify(producer).send(messageCaptor.capture(), anyLong());
+        assertThat(messageCaptor.getValue().getProperty(TraceIds.ROCKETMQ_PROPERTY))
+                .isEqualTo("trace-abc");
     }
 
     private JournalEmailInfo sampleInfo() {

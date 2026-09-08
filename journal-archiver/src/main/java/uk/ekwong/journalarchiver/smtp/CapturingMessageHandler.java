@@ -22,12 +22,15 @@ import java.io.InputStream;
 import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.subethamail.smtp.MessageContext;
 import org.subethamail.smtp.MessageHandler;
 import org.subethamail.smtp.RejectException;
 import uk.ekwong.journalarchiver.service.JournalProcessingService;
+import uk.ekwong.mailcommon.trace.TraceIds;
 
 /**
  * Handles a single SMTP mail transaction: captures the envelope sender and recipients, reads the
@@ -67,14 +70,20 @@ public class CapturingMessageHandler implements MessageHandler {
     public String data(InputStream data) throws RejectException, IOException {
         byte[] raw = readAll(data);
         SocketAddress clientAddress = context.getRemoteAddress();
-        log.info(
-                "Received message via SMTP: client={}, envelope sender={}, recipients={}, size={} bytes",
-                clientAddress,
-                envelopeSender,
-                recipients,
-                raw.length);
-        processingService.process(raw, envelopeSender, List.copyOf(recipients), clientAddress);
-        return null; // keep the standard "250 Ok" response
+        Map<String, String> previousContext = MDC.getCopyOfContextMap();
+        MDC.put(TraceIds.MDC_KEY, TraceIds.generate());
+        try {
+            log.info(
+                    "Received message via SMTP: client={}, envelope sender={}, recipients={}, size={} bytes",
+                    clientAddress,
+                    envelopeSender,
+                    recipients,
+                    raw.length);
+            processingService.process(raw, envelopeSender, List.copyOf(recipients), clientAddress);
+            return null; // keep the standard "250 Ok" response
+        } finally {
+            restoreContext(previousContext);
+        }
     }
 
     @Override
@@ -98,5 +107,13 @@ public class CapturingMessageHandler implements MessageHandler {
             out.write(buffer, 0, read);
         }
         return out.toByteArray();
+    }
+
+    private void restoreContext(Map<String, String> previousContext) {
+        if (previousContext == null || previousContext.isEmpty()) {
+            MDC.clear();
+        } else {
+            MDC.setContextMap(previousContext);
+        }
     }
 }

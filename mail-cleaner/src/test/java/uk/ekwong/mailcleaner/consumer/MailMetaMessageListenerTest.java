@@ -17,21 +17,31 @@
 package uk.ekwong.mailcleaner.consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.common.message.MessageExt;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import uk.ekwong.mailcleaner.service.MailCleaningService;
+import uk.ekwong.mailcommon.trace.TraceIds;
 
 class MailMetaMessageListenerTest {
 
     private final MailCleaningService cleaningService = mock(MailCleaningService.class);
     private final MailMetaMessageListener listener = new MailMetaMessageListener(cleaningService);
+
+    @BeforeEach
+    void clearMdc() {
+        MDC.clear();
+    }
 
     @Test
     void consumesMessageAfterSuccessfulCleaning() {
@@ -74,6 +84,25 @@ class MailMetaMessageListenerTest {
         assertThat(status).isEqualTo(ConsumeConcurrentlyStatus.RECONSUME_LATER);
         verify(cleaningService).clean("{}", "id-ok");
         verify(cleaningService).clean("{}", "id-bad");
+    }
+
+    @Test
+    void usesMessageTraceIdDuringCleaningAndCleansUpMdc() {
+        MessageExt message = message("id-1");
+        message.putUserProperty(TraceIds.ROCKETMQ_PROPERTY, "trace-abc");
+        AtomicReference<String> seenTraceId = new AtomicReference<>();
+        doAnswer(
+                        invocation -> {
+                            seenTraceId.set(MDC.get(TraceIds.MDC_KEY));
+                            return null;
+                        })
+                .when(cleaningService)
+                .clean("{}", "id-1");
+
+        listener.consumeMessage(List.of(message), null);
+
+        assertThat(seenTraceId.get()).isEqualTo("trace-abc");
+        assertThat(MDC.get(TraceIds.MDC_KEY)).isNull();
     }
 
     private MessageExt message(String key) {

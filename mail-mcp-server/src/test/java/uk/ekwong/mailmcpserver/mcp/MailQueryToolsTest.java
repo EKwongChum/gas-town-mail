@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.time.Instant;
@@ -42,12 +43,14 @@ import uk.ekwong.mailmcpserver.service.SearchResult;
 class MailQueryToolsTest {
 
     private final EmailQueryService queryService = mock(EmailQueryService.class);
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private final MailQueryTools tools =
             new MailQueryTools(
                     queryService,
                     new ObjectMapper()
                             .registerModule(new JavaTimeModule())
-                            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS));
+                            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS),
+                    meterRegistry);
 
     private MailInfoDocument sampleDocument;
 
@@ -150,6 +153,40 @@ class MailQueryToolsTest {
 
         assertThat(result.isError()).isFalse();
         assertThat(text(result)).contains("\"count\":7");
+    }
+
+    @Test
+    void recordsToolCallOutcomeMetrics() {
+        when(queryService.search(any(MailSearchRequest.class)))
+                .thenReturn(new SearchResult(1, List.of(sampleDocument)));
+        when(queryService.findById("missing")).thenReturn(Optional.empty());
+
+        callTool(0, "search_mails", Map.of());
+        callTool(1, "get_mail_by_id", Map.of("id", "missing"));
+
+        assertThat(
+                        meterRegistry
+                                .get("mail.mcp.tool.calls")
+                                .tag("tool", "search_mails")
+                                .tag("outcome", "success")
+                                .counter()
+                                .count())
+                .isEqualTo(1.0);
+        assertThat(
+                        meterRegistry
+                                .get("mail.mcp.tool.calls")
+                                .tag("tool", "get_mail_by_id")
+                                .tag("outcome", "error")
+                                .counter()
+                                .count())
+                .isEqualTo(1.0);
+        assertThat(
+                        meterRegistry
+                                .get("mail.mcp.tool.duration")
+                                .tag("tool", "search_mails")
+                                .timer()
+                                .count())
+                .isEqualTo(1L);
     }
 
     private McpSchema.CallToolResult callTool(

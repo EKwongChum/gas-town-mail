@@ -53,7 +53,12 @@ To build and test locally:
 ./mvnw -B clean verify
 ```
 
-The project ships with 120 unit tests across all modules.
+The project ships with 131 unit tests across all modules.
+
+Observability: HTTP `X-Request-Id` values are logged under the `traceId` MDC key, the archiver
+propagates the same key to mail-cleaner as a RocketMQ message user property, and metrics are exposed
+at `/actuator/prometheus`. Set `SPRING_PROFILES_ACTIVE=json` for Logstash-style JSON logs (already
+enabled in the provided docker compose app profile).
 
 ### Configuration
 

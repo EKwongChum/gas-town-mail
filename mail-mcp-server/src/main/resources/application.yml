@@ -13,7 +13,14 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,info,metrics,prometheus,loggers
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 app:
   mcp:
@@ -43,3 +50,5 @@ springdoc:
 logging:
   level:
     uk.ekwong: INFO
+  pattern:
+    level: "%5p [%X{traceId:-}]"

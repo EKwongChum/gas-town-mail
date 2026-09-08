@@ -14,7 +14,14 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,info,metrics,prometheus,loggers
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 springdoc:
   api-docs:
@@ -94,3 +101,5 @@ logging:
   level:
     uk.ekwong.journalarchiver: INFO
     org.subethamail: WARN
+  pattern:
+    level: "%5p [%X{traceId:-}]"

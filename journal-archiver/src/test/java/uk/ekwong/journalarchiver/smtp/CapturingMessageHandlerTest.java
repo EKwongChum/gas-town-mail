@@ -18,6 +18,8 @@ package uk.ekwong.journalarchiver.smtp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -28,11 +30,14 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.subethamail.smtp.MessageContext;
 import org.subethamail.smtp.RejectException;
 import uk.ekwong.journalarchiver.service.JournalProcessingService;
+import uk.ekwong.mailcommon.trace.TraceIds;
 
 class CapturingMessageHandlerTest {
 
@@ -42,6 +47,7 @@ class CapturingMessageHandlerTest {
 
     @BeforeEach
     void setUp() {
+        MDC.clear();
         when(context.getRemoteAddress()).thenReturn(clientAddress);
     }
 
@@ -82,5 +88,24 @@ class CapturingMessageHandlerTest {
                         RejectException.class, e -> assertThat(e.getCode()).isEqualTo(552));
 
         verifyNoInteractions(processingService);
+    }
+
+    @Test
+    void exposesTraceIdWhileProcessingAndCleansItUpAfterwards() throws Exception {
+        CapturingMessageHandler handler =
+                new CapturingMessageHandler(context, processingService, 1024 * 1024);
+        AtomicReference<String> seenTraceId = new AtomicReference<>();
+        doAnswer(
+                        invocation -> {
+                            seenTraceId.set(MDC.get(TraceIds.MDC_KEY));
+                            return null;
+                        })
+                .when(processingService)
+                .process(any(), any(), any(), any());
+
+        handler.data(new ByteArrayInputStream("data".getBytes(StandardCharsets.UTF_8)));
+
+        assertThat(seenTraceId.get()).matches("[0-9a-f-]{36}");
+        assertThat(MDC.get(TraceIds.MDC_KEY)).isNull();
     }
 }
