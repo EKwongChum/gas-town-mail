@@ -81,6 +81,8 @@ services:
     ports:
       - "8080:8080"
       - "2525:2525"
+    volumes:
+      - journal-archiver-data:/app/data
     environment:
       SPRING_PROFILES_ACTIVE: json
       SPRING_DATA_MONGODB_URI: "mongodb://mongodb:27017/journal_archiver?serverSelectionTimeoutMS=10000&connectTimeoutMS=5000"
@@ -134,3 +136,4 @@ volumes:
   minio-data:
   broker-data:
   es-data:
+  journal-archiver-data:

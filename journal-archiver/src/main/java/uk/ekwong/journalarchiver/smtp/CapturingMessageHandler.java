@@ -29,30 +29,28 @@ import org.slf4j.MDC;
 import org.subethamail.smtp.MessageContext;
 import org.subethamail.smtp.MessageHandler;
 import org.subethamail.smtp.RejectException;
-import uk.ekwong.journalarchiver.service.JournalProcessingService;
+import uk.ekwong.journalarchiver.spool.MailInbox;
 import uk.ekwong.mailcommon.trace.TraceIds;
 
 /**
  * Handles a single SMTP mail transaction: captures the envelope sender and recipients, reads the
- * full message data and hands it to the processing pipeline.
+ * full message data and durably stores it in the {@link MailInbox} before acknowledging the
+ * message, so a later processing failure never loses an accepted mail.
  */
 public class CapturingMessageHandler implements MessageHandler {
 
     private static final Logger log = LoggerFactory.getLogger(CapturingMessageHandler.class);
 
     private final MessageContext context;
-    private final JournalProcessingService processingService;
+    private final MailInbox inbox;
     private final int maxMessageSize;
 
     private String envelopeSender;
     private final List<String> recipients = new ArrayList<>();
 
-    public CapturingMessageHandler(
-            MessageContext context,
-            JournalProcessingService processingService,
-            int maxMessageSize) {
+    public CapturingMessageHandler(MessageContext context, MailInbox inbox, int maxMessageSize) {
         this.context = context;
-        this.processingService = processingService;
+        this.inbox = inbox;
         this.maxMessageSize = maxMessageSize;
     }
 
@@ -79,8 +77,18 @@ public class CapturingMessageHandler implements MessageHandler {
                     envelopeSender,
                     recipients,
                     raw.length);
-            processingService.process(raw, envelopeSender, List.copyOf(recipients), clientAddress);
+            inbox.store(
+                    raw,
+                    envelopeSender,
+                    List.copyOf(recipients),
+                    clientAddress == null ? null : clientAddress.toString());
             return null; // keep the standard "250 Ok" response
+        } catch (IOException | RuntimeException e) {
+            log.error(
+                    "Could not durably store accepted message (envelope sender={}); refusing 250 so the sender retries",
+                    envelopeSender,
+                    e);
+            throw new RejectException(451, "Temporary local failure; please retry later");
         } finally {
             restoreContext(previousContext);
         }
@@ -88,7 +96,7 @@ public class CapturingMessageHandler implements MessageHandler {
 
     @Override
     public void done() {
-        // nothing to do; processing is handed off asynchronously
+        // nothing to do; the message was durably stored and the inbox relay processes it later
     }
 
     private byte[] readAll(InputStream in) throws IOException, RejectException {

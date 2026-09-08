@@ -36,13 +36,13 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import org.subethamail.smtp.MessageContext;
 import org.subethamail.smtp.RejectException;
-import uk.ekwong.journalarchiver.service.JournalProcessingService;
+import uk.ekwong.journalarchiver.spool.MailInbox;
 import uk.ekwong.mailcommon.trace.TraceIds;
 
 class CapturingMessageHandlerTest {
 
     private final MessageContext context = mock(MessageContext.class);
-    private final JournalProcessingService processingService = mock(JournalProcessingService.class);
+    private final MailInbox inbox = mock(MailInbox.class);
     private final SocketAddress clientAddress = new InetSocketAddress("127.0.0.1", 12345);
 
     @BeforeEach
@@ -53,8 +53,7 @@ class CapturingMessageHandlerTest {
 
     @Test
     void capturesEnvelopeAndDelegatesRawMessageBytes() throws Exception {
-        CapturingMessageHandler handler =
-                new CapturingMessageHandler(context, processingService, 1024 * 1024);
+        CapturingMessageHandler handler = new CapturingMessageHandler(context, inbox, 1024 * 1024);
         handler.from("sender@example.com");
         handler.recipient("to@example.com");
         handler.recipient("cc@example.com");
@@ -64,18 +63,17 @@ class CapturingMessageHandlerTest {
         assertThat(handler.data(new ByteArrayInputStream(raw.getBytes(StandardCharsets.UTF_8))))
                 .isNull();
 
-        verify(processingService)
-                .process(
+        verify(inbox)
+                .store(
                         raw.getBytes(StandardCharsets.UTF_8),
                         "sender@example.com",
                         List.of("to@example.com", "cc@example.com"),
-                        clientAddress);
+                        "/127.0.0.1:12345");
     }
 
     @Test
     void rejectsMessageExceedingMaxSizeWithSmtp552() throws Exception {
-        CapturingMessageHandler handler =
-                new CapturingMessageHandler(context, processingService, 8);
+        CapturingMessageHandler handler = new CapturingMessageHandler(context, inbox, 8);
         handler.from("sender@example.com");
         handler.recipient("to@example.com");
 
@@ -87,21 +85,20 @@ class CapturingMessageHandlerTest {
                 .isInstanceOfSatisfying(
                         RejectException.class, e -> assertThat(e.getCode()).isEqualTo(552));
 
-        verifyNoInteractions(processingService);
+        verifyNoInteractions(inbox);
     }
 
     @Test
     void exposesTraceIdWhileProcessingAndCleansItUpAfterwards() throws Exception {
-        CapturingMessageHandler handler =
-                new CapturingMessageHandler(context, processingService, 1024 * 1024);
+        CapturingMessageHandler handler = new CapturingMessageHandler(context, inbox, 1024 * 1024);
         AtomicReference<String> seenTraceId = new AtomicReference<>();
         doAnswer(
                         invocation -> {
                             seenTraceId.set(MDC.get(TraceIds.MDC_KEY));
                             return null;
                         })
-                .when(processingService)
-                .process(any(), any(), any(), any());
+                .when(inbox)
+                .store(any(), any(), any(), any());
 
         handler.data(new ByteArrayInputStream("data".getBytes(StandardCharsets.UTF_8)));
 

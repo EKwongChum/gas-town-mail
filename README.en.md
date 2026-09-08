@@ -53,7 +53,7 @@ To build and test locally:
 ./mvnw -B clean verify
 ```
 
-The project ships with 131 unit tests across all modules.
+The project ships with 138 unit tests across all modules.
 
 Observability: HTTP `X-Request-Id` values are logged under the `traceId` MDC key, the archiver
 propagates the same key to mail-cleaner as a RocketMQ message user property, and metrics are exposed

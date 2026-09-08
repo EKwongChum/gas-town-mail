@@ -21,6 +21,7 @@ import java.util.List;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import uk.ekwong.journalarchiver.notify.NotificationStatus;
 
 /**
  * MongoDB document holding the basic information of a journaled email. The document id equals
@@ -44,6 +45,10 @@ public class JournalEmailInfo {
     private Instant updatedAt;
     private long modificationCount;
     private String objectKey;
+    private NotificationStatus notificationStatus = NotificationStatus.PENDING;
+    private Instant notificationAttemptAt;
+    private int notificationAttemptCount;
+    private Instant notifiedAt;
 
     public String getId() {
         return id;
@@ -163,5 +168,37 @@ public class JournalEmailInfo {
 
     public void setObjectKey(String objectKey) {
         this.objectKey = objectKey;
+    }
+
+    public NotificationStatus getNotificationStatus() {
+        return notificationStatus;
+    }
+
+    public void setNotificationStatus(NotificationStatus notificationStatus) {
+        this.notificationStatus = notificationStatus;
+    }
+
+    public Instant getNotificationAttemptAt() {
+        return notificationAttemptAt;
+    }
+
+    public void setNotificationAttemptAt(Instant notificationAttemptAt) {
+        this.notificationAttemptAt = notificationAttemptAt;
+    }
+
+    public int getNotificationAttemptCount() {
+        return notificationAttemptCount;
+    }
+
+    public void setNotificationAttemptCount(int notificationAttemptCount) {
+        this.notificationAttemptCount = notificationAttemptCount;
+    }
+
+    public Instant getNotifiedAt() {
+        return notifiedAt;
+    }
+
+    public void setNotifiedAt(Instant notifiedAt) {
+        this.notifiedAt = notifiedAt;
     }
 }

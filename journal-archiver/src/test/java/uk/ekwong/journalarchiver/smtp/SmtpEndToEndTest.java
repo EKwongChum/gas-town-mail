@@ -22,11 +22,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -35,10 +35,13 @@ import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.Executor;
 import org.bson.Document;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -52,6 +55,8 @@ import uk.ekwong.journalarchiver.notify.MailMetaPublisher;
 import uk.ekwong.journalarchiver.service.DeadLetterStore;
 import uk.ekwong.journalarchiver.service.JournalMailFilter;
 import uk.ekwong.journalarchiver.service.JournalProcessingService;
+import uk.ekwong.journalarchiver.spool.InboxRelay;
+import uk.ekwong.journalarchiver.spool.MailInbox;
 import uk.ekwong.mailcommon.mail.EmailDetailsExtractor;
 import uk.ekwong.mailcommon.mail.EmailIdGenerator;
 import uk.ekwong.mailcommon.mail.JournalDetector;
@@ -59,6 +64,8 @@ import uk.ekwong.mailcommon.mail.OriginalEmailExtractor;
 import uk.ekwong.mailcommon.storage.ObjectStorageService;
 
 class SmtpEndToEndTest {
+
+    @TempDir Path tempDir;
 
     @Test
     void receivesJournalEmailViaSmtpAndArchivesIt() throws Exception {
@@ -68,6 +75,9 @@ class SmtpEndToEndTest {
         MailMetaPublisher publisher = mock(MailMetaPublisher.class);
         DeadLetterStore deadLetterStore = mock(DeadLetterStore.class);
         AppProperties properties = new AppProperties();
+        properties.getProcessing().setSpoolDir(tempDir.resolve("spool").toString());
+        properties.getProcessing().setDeadLetterDir(tempDir.resolve("dead-letter").toString());
+        MailInbox inbox = new MailInbox(properties, new ObjectMapper());
 
         JournalProcessingService processor =
                 new JournalProcessingService(
@@ -95,17 +105,18 @@ class SmtpEndToEndTest {
                                 context ->
                                         new CapturingMessageHandler(
                                                 context,
-                                                processor,
+                                                inbox,
                                                 properties.getSmtp().getMaxMessageSize()))
                         .build();
         server.start();
 
         try {
             sendViaRawSmtp(port, TestEmails.journalReport());
+            drainOnce(inbox, processor, properties);
 
             ArgumentCaptor<Query> queryCaptor = ArgumentCaptor.forClass(Query.class);
             ArgumentCaptor<Update> updateCaptor = ArgumentCaptor.forClass(Update.class);
-            verify(mongoTemplate, timeout(5000))
+            verify(mongoTemplate)
                     .upsert(
                             queryCaptor.capture(),
                             updateCaptor.capture(),
@@ -118,7 +129,7 @@ class SmtpEndToEndTest {
             assertThat(updateDoc.get("$set")).isNotNull();
 
             ArgumentCaptor<byte[]> objectCaptor = ArgumentCaptor.forClass(byte[].class);
-            verify(storage, timeout(5000)).store(eq(expectedId), objectCaptor.capture());
+            verify(storage).store(eq(expectedId), objectCaptor.capture());
             String stored = new String(objectCaptor.getValue(), StandardCharsets.UTF_8);
             assertThat(stored).contains("Message-ID: <original-123@example.com>");
             assertThat(stored).contains("Hello Bob, please review the quarterly numbers.");
@@ -126,7 +137,7 @@ class SmtpEndToEndTest {
 
             ArgumentCaptor<JournalEmailInfo> notifyCaptor =
                     ArgumentCaptor.forClass(JournalEmailInfo.class);
-            verify(publisher, timeout(5000)).publish(notifyCaptor.capture());
+            verify(publisher).publish(notifyCaptor.capture());
             assertThat(notifyCaptor.getValue().getId()).isEqualTo(expectedId);
             assertThat(notifyCaptor.getValue().getModificationCount()).isEqualTo(1);
 
@@ -150,6 +161,9 @@ class SmtpEndToEndTest {
         MailMetaPublisher publisher = mock(MailMetaPublisher.class);
         DeadLetterStore deadLetterStore = mock(DeadLetterStore.class);
         AppProperties properties = new AppProperties();
+        properties.getProcessing().setSpoolDir(tempDir.resolve("spool-2").toString());
+        properties.getProcessing().setDeadLetterDir(tempDir.resolve("dead-letter-2").toString());
+        MailInbox inbox = new MailInbox(properties, new ObjectMapper());
 
         JournalProcessingService processor =
                 new JournalProcessingService(
@@ -170,17 +184,24 @@ class SmtpEndToEndTest {
                                 context ->
                                         new CapturingMessageHandler(
                                                 context,
-                                                processor,
+                                                inbox,
                                                 properties.getSmtp().getMaxMessageSize()))
                         .build();
         server.start();
 
         try {
             sendViaRawSmtp(port, TestEmails.plainEmail());
+            drainOnce(inbox, processor, properties);
             verifyNoInteractions(mongoTemplate, storage, publisher, deadLetterStore);
         } finally {
             server.stop();
         }
+    }
+
+    private void drainOnce(
+            MailInbox inbox, JournalProcessingService processor, AppProperties properties) {
+        Executor directExecutor = Runnable::run;
+        new InboxRelay(inbox, processor, directExecutor, properties).pollOnce();
     }
 
     private JournalEmailInfo savedInfo(String id) {

@@ -18,7 +18,6 @@ package uk.ekwong.journalarchiver.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.net.SocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -52,11 +51,11 @@ public class DeadLetterStore {
      * Writes the raw email as an {@code .eml} file plus a sidecar JSON file with the receive
      * context and the failure reason.
      */
-    public void save(
+    public boolean save(
             byte[] rawMessage,
             String envelopeSender,
             List<String> recipients,
-            SocketAddress clientAddress,
+            String clientAddress,
             Throwable error) {
         try {
             Files.createDirectories(directory);
@@ -72,7 +71,7 @@ public class DeadLetterStore {
             context.put("savedAt", Instant.now().toString());
             context.put("envelopeSender", envelopeSender);
             context.put("recipients", recipients);
-            context.put("clientAddress", clientAddress == null ? null : clientAddress.toString());
+            context.put("clientAddress", clientAddress);
             context.put("error", error == null ? null : error.toString());
             Path contextFile = directory.resolve(baseName + ".json");
             Files.writeString(
@@ -83,8 +82,10 @@ public class DeadLetterStore {
                     "Email could not be archived after all retries; saved to {} (context: {})",
                     emlFile,
                     contextFile);
+            return true;
         } catch (IOException | RuntimeException e) {
             log.error("Failed to persist dead-letter email", e);
+            return false;
         }
     }
 }

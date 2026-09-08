@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -64,16 +65,29 @@ class JournalProcessingServiceTest {
         when(mongoTemplate.findById(expectedId, JournalEmailInfo.class)).thenReturn(saved);
         when(publisher.publish(saved)).thenReturn(true);
 
-        service(properties(1, 0))
-                .process(raw, "postmaster@corp.local", List.of("journal@archive.local"), null);
+        boolean handled =
+                service(properties(1, 0))
+                        .process(
+                                raw,
+                                "postmaster@corp.local",
+                                List.of("journal@archive.local"),
+                                null);
 
+        assertThat(handled).isTrue();
         verify(storage).store(eq(expectedId), any(byte[].class));
         ArgumentCaptor<Update> updateCaptor = ArgumentCaptor.forClass(Update.class);
         verify(mongoTemplate)
                 .upsert(any(Query.class), updateCaptor.capture(), eq(JournalEmailInfo.class));
         Document set = (Document) updateCaptor.getValue().getUpdateObject().get("$set");
         assertThat(set).containsEntry("objectKey", expectedId);
+        assertThat(set.get("notificationStatus").toString()).isEqualTo("PENDING");
         verify(publisher).publish(saved);
+        ArgumentCaptor<Update> sentUpdateCaptor = ArgumentCaptor.forClass(Update.class);
+        verify(mongoTemplate)
+                .updateFirst(
+                        any(Query.class), sentUpdateCaptor.capture(), eq(JournalEmailInfo.class));
+        Document sentSet = (Document) sentUpdateCaptor.getValue().getUpdateObject().get("$set");
+        assertThat(sentSet.get("notificationStatus").toString()).isEqualTo("SENT");
         verifyNoInteractions(deadLetterStore);
     }
 
@@ -84,8 +98,10 @@ class JournalProcessingServiceTest {
                 .when(storage)
                 .store(anyString(), any(byte[].class));
 
-        service(properties(3, 0)).process(raw, "postmaster@corp.local", List.of(), null);
+        boolean handled =
+                service(properties(3, 0)).process(raw, "postmaster@corp.local", List.of(), null);
 
+        assertThat(handled).isFalse();
         verify(storage, times(3)).store(anyString(), any(byte[].class));
         verify(deadLetterStore)
                 .save(eq(raw), eq("postmaster@corp.local"), any(), any(), any(Throwable.class));
@@ -93,17 +109,18 @@ class JournalProcessingServiceTest {
     }
 
     @Test
-    void compensatesMongoFailureByDeletingTheObject() {
+    void keepsS3ObjectAndSpoolWhenMongoWriteIsUncertain() {
         byte[] raw = TestEmails.journalReport().getBytes(StandardCharsets.UTF_8);
         when(mongoTemplate.upsert(any(Query.class), any(Update.class), eq(JournalEmailInfo.class)))
                 .thenThrow(new RuntimeException("mongodb unavailable"));
 
-        service(properties(2, 0)).process(raw, "postmaster@corp.local", List.of(), null);
+        boolean handled =
+                service(properties(2, 0)).process(raw, "postmaster@corp.local", List.of(), null);
 
+        assertThat(handled).isFalse();
         verify(storage, times(2)).store(anyString(), any(byte[].class));
-        verify(storage, times(2)).deleteIfPresent(anyString());
-        verify(deadLetterStore).save(any(), any(), any(), any(), any(Throwable.class));
-        verifyNoInteractions(publisher);
+        verify(storage, never()).deleteIfPresent(anyString());
+        verifyNoInteractions(publisher, deadLetterStore);
     }
 
     @Test
