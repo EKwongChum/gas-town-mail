@@ -261,6 +261,10 @@ public class AppProperties {
         private int retryMaxAttempts = 3;
         private long retryBackoffMs = 1000;
         private String deadLetterDir = "./data/dead-letter";
+        private String spoolDir = "./data/spool";
+        private long spoolPollIntervalMs = 1000;
+        private long spoolRetryDelayMs = 30000;
+        private int spoolMaxBatch = 16;
 
         public int getCorePoolSize() {
             return corePoolSize;
@@ -309,6 +313,38 @@ public class AppProperties {
         public void setDeadLetterDir(String deadLetterDir) {
             this.deadLetterDir = deadLetterDir;
         }
+
+        public String getSpoolDir() {
+            return spoolDir;
+        }
+
+        public void setSpoolDir(String spoolDir) {
+            this.spoolDir = spoolDir;
+        }
+
+        public long getSpoolPollIntervalMs() {
+            return spoolPollIntervalMs;
+        }
+
+        public void setSpoolPollIntervalMs(long spoolPollIntervalMs) {
+            this.spoolPollIntervalMs = spoolPollIntervalMs;
+        }
+
+        public long getSpoolRetryDelayMs() {
+            return spoolRetryDelayMs;
+        }
+
+        public void setSpoolRetryDelayMs(long spoolRetryDelayMs) {
+            this.spoolRetryDelayMs = spoolRetryDelayMs;
+        }
+
+        public int getSpoolMaxBatch() {
+            return spoolMaxBatch;
+        }
+
+        public void setSpoolMaxBatch(int spoolMaxBatch) {
+            this.spoolMaxBatch = spoolMaxBatch;
+        }
     }
 
     public static class Resend {
@@ -343,6 +379,7 @@ public class AppProperties {
 
     public static class Notify {
         private RocketMq rocketMq = new RocketMq();
+        private Outbox outbox = new Outbox();
 
         public RocketMq getRocketMq() {
             return rocketMq;
@@ -350,6 +387,14 @@ public class AppProperties {
 
         public void setRocketMq(RocketMq rocketMq) {
             this.rocketMq = rocketMq;
+        }
+
+        public Outbox getOutbox() {
+            return outbox;
+        }
+
+        public void setOutbox(Outbox outbox) {
+            this.outbox = outbox;
         }
 
         public static class RocketMq {
@@ -415,6 +460,45 @@ public class AppProperties {
 
             public void setRetryTimesWhenSendFailed(int retryTimesWhenSendFailed) {
                 this.retryTimesWhenSendFailed = retryTimesWhenSendFailed;
+            }
+        }
+
+        public static class Outbox {
+            private long scanIntervalMs = 30000;
+            private long graceMs = 60000;
+            private long retryBackoffMs = 30000;
+            private int maxAttempts = 10;
+
+            public long getScanIntervalMs() {
+                return scanIntervalMs;
+            }
+
+            public void setScanIntervalMs(long scanIntervalMs) {
+                this.scanIntervalMs = scanIntervalMs;
+            }
+
+            public long getGraceMs() {
+                return graceMs;
+            }
+
+            public void setGraceMs(long graceMs) {
+                this.graceMs = graceMs;
+            }
+
+            public long getRetryBackoffMs() {
+                return retryBackoffMs;
+            }
+
+            public void setRetryBackoffMs(long retryBackoffMs) {
+                this.retryBackoffMs = retryBackoffMs;
+            }
+
+            public int getMaxAttempts() {
+                return maxAttempts;
+            }
+
+            public void setMaxAttempts(int maxAttempts) {
+                this.maxAttempts = maxAttempts;
             }
         }
     }

@@ -35,11 +35,12 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import uk.ekwong.journalarchiver.config.AppProperties;
 import uk.ekwong.journalarchiver.model.JournalEmailInfo;
 import uk.ekwong.journalarchiver.notify.MailMetaPublisher;
+import uk.ekwong.journalarchiver.notify.NotificationStatus;
+import uk.ekwong.journalarchiver.spool.SpooledMessage;
 import uk.ekwong.mailcommon.mail.EmailDetails;
 import uk.ekwong.mailcommon.mail.EmailDetailsExtractor;
 import uk.ekwong.mailcommon.mail.EmailIdGenerator;
@@ -88,21 +89,45 @@ public class JournalProcessingService {
         this.properties = properties;
     }
 
-    @Async("journalProcessingExecutor")
-    public void process(
+    public boolean process(
             byte[] rawMessage,
             String envelopeSender,
             List<String> recipients,
             SocketAddress clientAddress) {
+        return processRaw(
+                rawMessage,
+                envelopeSender,
+                recipients,
+                clientAddress == null ? null : clientAddress.toString());
+    }
+
+    /** Processes one durable spooled message. Returns {@code true} when it can be discarded. */
+    public boolean process(SpooledMessage message) {
+        return processRaw(
+                message.raw(),
+                message.envelopeSender(),
+                message.recipients(),
+                message.clientAddress());
+    }
+
+    private boolean processRaw(
+            byte[] rawMessage,
+            String envelopeSender,
+            List<String> recipients,
+            String clientAddress) {
         AppProperties.Processing config = properties.getProcessing();
         int maxAttempts = Math.max(1, config.getRetryMaxAttempts());
         Throwable lastError = null;
+        boolean metadataWritePending = false;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 doProcess(rawMessage, envelopeSender, recipients, clientAddress);
-                return;
+                return true;
             } catch (Exception e) {
                 lastError = e;
+                if (e instanceof MetadataWritePendingException) {
+                    metadataWritePending = true;
+                }
                 log.warn(
                         "Processing attempt {}/{} failed (envelope sender={}): {}",
                         attempt,
@@ -119,14 +144,20 @@ public class JournalProcessingService {
                 }
             }
         }
-        deadLetterStore.save(rawMessage, envelopeSender, recipients, clientAddress, lastError);
+        if (metadataWritePending) {
+            log.warn(
+                    "Metadata write is still pending after {} attempts for envelope sender={}; "
+                            + "the S3 object and spool file are kept for later reconciliation",
+                    maxAttempts,
+                    envelopeSender);
+            return false;
+        }
+        return deadLetterStore.save(
+                rawMessage, envelopeSender, recipients, clientAddress, lastError);
     }
 
     private void doProcess(
-            byte[] rawMessage,
-            String envelopeSender,
-            List<String> recipients,
-            SocketAddress clientAddress)
+            byte[] rawMessage, String envelopeSender, List<String> recipients, String clientAddress)
             throws MessagingException, IOException {
         MimeMessage received = parse(rawMessage);
         AppProperties.Journal journalConfig = properties.getJournal();
@@ -183,14 +214,20 @@ public class JournalProcessingService {
         try {
             info = saveMetadata(id, details, messageId, envelopeSender, recipients, clientAddress);
         } catch (RuntimeException e) {
-            objectStorageService.deleteIfPresent(id);
-            throw e;
+            log.warn(
+                    "Metadata write failed after S3 object was stored for id={}; "
+                            + "keeping the object for reconciliation",
+                    id,
+                    e);
+            throw new MetadataWritePendingException(e);
         }
 
         if (!mailMetaPublisher.publish(info)) {
             log.warn(
                     "Notification was not published for id={}; use the resend endpoint to replay",
                     id);
+        } else {
+            markNotificationSent(id);
         }
 
         log.info(
@@ -223,7 +260,7 @@ public class JournalProcessingService {
             String messageId,
             String envelopeSender,
             List<String> recipients,
-            SocketAddress clientAddress) {
+            String clientAddress) {
         Instant now = Instant.now();
         Query query = Query.query(Criteria.where("_id").is(id));
         Update update = new Update();
@@ -238,13 +275,17 @@ public class JournalProcessingService {
         update.set("objectKey", id);
         update.set("envelopeSender", envelopeSender);
         update.set("recipients", recipients);
-        update.set("clientAddress", clientAddress == null ? null : clientAddress.toString());
+        update.set("clientAddress", clientAddress);
         update.set("receivedAt", now);
         update.set("updatedAt", now);
         // atomic counter: 1 on first archive, +1 on every re-archive of the
         // same id (no read-modify-write race)
         update.inc("modificationCount", 1);
         update.setOnInsert("createdAt", now);
+        update.set("notificationStatus", NotificationStatus.PENDING);
+        update.set("notificationAttemptAt", now);
+        update.set("notificationAttemptCount", 0);
+        update.set("notifiedAt", null);
 
         mongoTemplate.upsert(query, update, JournalEmailInfo.class);
         JournalEmailInfo saved = mongoTemplate.findById(id, JournalEmailInfo.class);
@@ -258,7 +299,30 @@ public class JournalProcessingService {
         return saved;
     }
 
+    private void markNotificationSent(String id) {
+        try {
+            mongoTemplate.updateFirst(
+                    Query.query(Criteria.where("_id").is(id)),
+                    new Update()
+                            .set("notificationStatus", NotificationStatus.SENT)
+                            .set("notifiedAt", Instant.now()),
+                    JournalEmailInfo.class);
+        } catch (RuntimeException e) {
+            log.warn(
+                    "Notification was published but its SENT state could not be persisted for id={}; the outbox scanner will retry",
+                    id,
+                    e);
+        }
+    }
+
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    /** Marks a Mongo write whose result is unknown/undelivered after the S3 object was stored. */
+    private static final class MetadataWritePendingException extends RuntimeException {
+        private MetadataWritePendingException(Throwable cause) {
+            super("metadata write pending after S3 store", cause);
+        }
     }
 }

@@ -81,7 +81,10 @@ services:
     ports:
       - "8080:8080"
       - "2525:2525"
+    volumes:
+      - journal-archiver-data:/app/data
     environment:
+      SPRING_PROFILES_ACTIVE: json
       SPRING_DATA_MONGODB_URI: "mongodb://mongodb:27017/journal_archiver?serverSelectionTimeoutMS=10000&connectTimeoutMS=5000"
       APP_STORAGE_S3_ENDPOINT: http://minio:9000
       # kebab-case 属性 name-server 对应的环境变量是单段 NAMESERVER
@@ -103,6 +106,7 @@ services:
     ports:
       - "8081:8081"
     environment:
+      SPRING_PROFILES_ACTIVE: json
       SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
       APP_STORAGE_S3_ENDPOINT: http://minio:9000
       APP_ROCKETMQ_NAMESERVER: rocketmq-namesrv:9876
@@ -123,6 +127,7 @@ services:
     ports:
       - "8082:8082"
     environment:
+      SPRING_PROFILES_ACTIVE: json
       SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
       APP_STORAGE_S3_ENDPOINT: http://minio:9000
 
@@ -131,3 +136,4 @@ volumes:
   minio-data:
   broker-data:
   es-data:
+  journal-archiver-data:

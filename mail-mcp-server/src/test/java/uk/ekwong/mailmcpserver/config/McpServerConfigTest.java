@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.modelcontextprotocol.server.McpSyncServer;
 import io.modelcontextprotocol.server.transport.WebMvcStreamableServerTransportProvider;
 import org.junit.jupiter.api.Test;
@@ -39,7 +40,9 @@ class McpServerConfigTest {
         assertThat(transport.getRouterFunction()).isNotNull();
         assertThat(config.mcpRouterFunction(transport)).isNotNull();
 
-        MailQueryTools tools = new MailQueryTools(mock(EmailQueryService.class), objectMapper);
+        MailQueryTools tools =
+                new MailQueryTools(
+                        mock(EmailQueryService.class), objectMapper, new SimpleMeterRegistry());
         McpSyncServer server = config.mcpSyncServer(transport, tools);
         try {
             assertThat(server).isNotNull();

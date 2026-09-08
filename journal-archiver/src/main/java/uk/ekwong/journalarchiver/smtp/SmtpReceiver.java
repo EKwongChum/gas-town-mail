@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.subethamail.smtp.server.SMTPServer;
 import uk.ekwong.journalarchiver.config.AppProperties;
-import uk.ekwong.journalarchiver.service.JournalProcessingService;
+import uk.ekwong.journalarchiver.spool.MailInbox;
 
 /**
  * Starts and stops the embedded SMTP server. The server binds to all interfaces by default so it
@@ -36,12 +36,12 @@ public class SmtpReceiver {
 
     private static final Logger log = LoggerFactory.getLogger(SmtpReceiver.class);
 
-    private final JournalProcessingService processingService;
+    private final MailInbox inbox;
     private final AppProperties properties;
     private SMTPServer server;
 
-    public SmtpReceiver(JournalProcessingService processingService, AppProperties properties) {
-        this.processingService = processingService;
+    public SmtpReceiver(MailInbox inbox, AppProperties properties) {
+        this.inbox = inbox;
         this.properties = properties;
     }
 
@@ -61,9 +61,7 @@ public class SmtpReceiver {
                         .messageHandlerFactory(
                                 context ->
                                         new CapturingMessageHandler(
-                                                context,
-                                                processingService,
-                                                smtp.getMaxMessageSize()))
+                                                context, inbox, smtp.getMaxMessageSize()))
                         .maxConnections(smtp.getMaxConnections())
                         .maxRecipients(smtp.getMaxRecipients())
                         .connectionTimeoutMs(smtp.getConnectionTimeoutSeconds() * 1000)

@@ -18,14 +18,17 @@ package uk.ekwong.mailcleaner.consumer;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
 import org.apache.rocketmq.common.message.MessageExt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import uk.ekwong.mailcleaner.service.MailCleaningService;
+import uk.ekwong.mailcommon.trace.TraceIds;
 
 /**
  * RocketMQ message listener for the {@code mail_meta_topic} topic. Each message triggers one mail
@@ -47,17 +50,30 @@ public class MailMetaMessageListener implements MessageListenerConcurrently {
             List<MessageExt> msgs, ConsumeConcurrentlyContext context) {
         boolean allSucceeded = true;
         for (MessageExt msg : msgs) {
+            Map<String, String> previousContext = MDC.getCopyOfContextMap();
+            String traceId = msg.getProperty(TraceIds.ROCKETMQ_PROPERTY);
+            MDC.put(TraceIds.MDC_KEY, traceId == null ? TraceIds.generate() : traceId);
             try {
                 String payload = new String(msg.getBody(), StandardCharsets.UTF_8);
                 mailCleaningService.clean(payload, msg.getKeys());
             } catch (Exception e) {
                 log.error("Mail cleaning failed, message key={}, will redeliver", msg.getKeys(), e);
                 allSucceeded = false;
+            } finally {
+                restoreContext(previousContext);
             }
         }
         // still process the rest of the batch; only redeliver when something failed
         return allSucceeded
                 ? ConsumeConcurrentlyStatus.CONSUME_SUCCESS
                 : ConsumeConcurrentlyStatus.RECONSUME_LATER;
+    }
+
+    private void restoreContext(Map<String, String> previousContext) {
+        if (previousContext == null || previousContext.isEmpty()) {
+            MDC.clear();
+        } else {
+            MDC.setContextMap(previousContext);
+        }
     }
 }

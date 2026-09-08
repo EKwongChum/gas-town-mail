@@ -14,21 +14,11 @@
  * limitations under the License.
  */
 
-package uk.ekwong.mailcleaner.config;
+package uk.ekwong.journalarchiver.notify;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-import io.swagger.v3.oas.models.OpenAPI;
-import org.junit.jupiter.api.Test;
-
-class OpenApiConfigTest {
-
-    @Test
-    void providesOpenApiMetadata() {
-        OpenAPI api = new OpenApiConfig().mailCleanerOpenApi();
-
-        assertThat(api.getInfo().getTitle()).isEqualTo("mail-cleaner API");
-        assertThat(api.getInfo().getVersion()).isEqualTo("1.2.0");
-        assertThat(api.getTags()).extracting(tag -> tag.getName()).contains("Mail info management");
-    }
+/** Durable outbox state of a {@code mail_meta_topic} notification. */
+public enum NotificationStatus {
+    PENDING,
+    SENT,
+    FAILED
 }

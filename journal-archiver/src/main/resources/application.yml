@@ -14,7 +14,14 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,info,metrics,prometheus,loggers
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 springdoc:
   api-docs:
@@ -65,6 +72,11 @@ app:
     retry-max-attempts: 3
     retry-backoff-ms: 1000
     dead-letter-dir: ./data/dead-letter
+    # durable SMTP inbox: accepted mail is fsynced here before the 250 reply
+    spool-dir: ./data/spool
+    spool-poll-interval-ms: 1000
+    spool-retry-delay-ms: 30000
+    spool-max-batch: 16
   resend:
     # maximum number of ids accepted by the resend endpoint
     max-ids: 1000
@@ -80,6 +92,13 @@ app:
       tag: mail-meta
       send-timeout-ms: 3000
       retry-times-when-send-failed: 2
+    # Mongo-backed outbox: pending notifications are retried by a background scan
+    outbox:
+      scan-interval-ms: 30000
+      # do not pick up a PENDING record before the immediate in-pipeline publish has had time to mark it SENT
+      grace-ms: 60000
+      retry-backoff-ms: 30000
+      max-attempts: 10
   storage:
     s3:
       endpoint: http://localhost:9000
@@ -94,3 +113,5 @@ logging:
   level:
     uk.ekwong.journalarchiver: INFO
     org.subethamail: WARN
+  pattern:
+    level: "%5p [%X{traceId:-}]"

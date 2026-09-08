@@ -126,7 +126,7 @@ export JAVA_HOME=/path/to/jdk17
 归档应用（HTTP 8080 / SMTP 2525）：
 
 ```bash
-java -jar journal-archiver/target/journal-archiver-1.1.0.jar
+java -jar journal-archiver/target/journal-archiver-1.2.0.jar
 # 或先安装共享模块到本地仓库，再用 spring-boot:run 调试：
 # ./mvnw install -DskipTests
 # ./mvnw -pl journal-archiver spring-boot:run
@@ -135,13 +135,13 @@ java -jar journal-archiver/target/journal-archiver-1.1.0.jar
 清洗应用（HTTP 8081 / 消费 mail_meta_topic）：
 
 ```bash
-java -jar mail-cleaner/target/mail-cleaner-1.1.0.jar
+java -jar mail-cleaner/target/mail-cleaner-1.2.0.jar
 ```
 
 MCP 查询应用（HTTP 8082 / MCP 端点 `/mcp`）：
 
 ```bash
-java -jar mail-mcp-server/target/mail-mcp-server-1.1.0.jar
+java -jar mail-mcp-server/target/mail-mcp-server-1.2.0.jar
 ```
 
 > MCP 工具的完整参数与调用示例见 [mail-mcp-server/README.md](mail-mcp-server/README.md)（接口文档）。
@@ -212,6 +212,10 @@ Stored email object s3://journal-emails/QWxpY2UgPGFsaWNlQGV4YW1wbGUuY29tPg==_PG9
 | `app.processing.retry-max-attempts` | `3` | 归档失败时的最大尝试次数 |
 | `app.processing.retry-backoff-ms` | `1000` | 重试间隔（按尝试次数递增） |
 | `app.processing.dead-letter-dir` | `./data/dead-letter` | 最终失败邮件的本地落盘目录 |
+| `app.processing.spool-dir` | `./data/spool` | SMTP 落盘 spool 根目录（inbox/work/quarantine） |
+| `app.processing.spool-poll-interval-ms` | `1000` | spool 后台消费轮询间隔 |
+| `app.processing.spool-retry-delay-ms` | `30000` | spool 处理失败后的重试延迟 |
+| `app.processing.spool-max-batch` | `16` | 单次轮询最多领取的 spool 文件数 |
 | `app.resend.max-ids` | `1000` | 重发接口单次允许的最大 ids 数量 |
 | `app.resend.parallelism` / `queue-capacity` | 4 / 1000 | 重发任务的线程池参数 |
 | `app.notify.rocketmq.enabled` | `true` | 是否发送归档完成通知 |
@@ -221,9 +225,13 @@ Stored email object s3://journal-emails/QWxpY2UgPGFsaWNlQGV4YW1wbGUuY29tPg==_PG9
 | `app.notify.rocketmq.tag` | `mail-meta` | 通知 tag（置空则只发 topic） |
 | `app.notify.rocketmq.send-timeout-ms` | `3000` | 同步发送超时 |
 | `app.notify.rocketmq.retry-times-when-send-failed` | `2` | 发送失败时 RocketMQ 客户端内置重试次数 |
+| `app.notify.outbox.scan-interval-ms` | `30000` | Mongo outbox 扫描间隔 |
+| `app.notify.outbox.grace-ms` | `60000` | 新记录在立即发布完成前的宽限期 |
+| `app.notify.outbox.retry-backoff-ms` | `30000` | outbox 重试退避 |
+| `app.notify.outbox.max-attempts` | `10` | outbox 最大自动重试次数（之后标记 FAILED） |
 | `server.port` | `8080` | HTTP 接口端口 |
 | `spring.data.mongodb.uri` | `mongodb://.../journal_archiver?serverSelectionTimeoutMS=10000&connectTimeoutMS=5000` | MongoDB 连接串（含超时配置） |
-| `management.endpoints.web.exposure.include` | `health` | 仅暴露健康检查端点 |
+| `management.endpoints.web.exposure.include` | `health,info,metrics,prometheus,loggers` | 健康检查、应用信息与监控指标端点（供 Prometheus 抓取） |
 | `app.storage.s3.endpoint` / `region` / `access-key` / `secret-key` / `bucket` / `path-style` | MinIO 本地默认值 | S3 兼容对象存储配置 |
 | `app.storage.s3.create-bucket-if-missing` | `true` | 启动时自动创建 bucket |
 
@@ -237,17 +245,25 @@ Stored email object s3://journal-emails/QWxpY2UgPGFsaWNlQGV4YW1wbGUuY29tPg==_PG9
 | `createdAt` | 数据创建时间（时间戳），首次归档时写入，重复归档同一 id 时保持不变 |
 | `updatedAt` | 数据最后修改时间（时间戳），每次保存更新 |
 | `modificationCount` | 数据修改次数，首次归档为 `1`，同一 id 再次归档时 +1（Mongo `$inc` 原子自增，无并发计数丢失） |
+| `notificationStatus` | 通知 outbox 状态：`PENDING` / `SENT` / `FAILED` |
+| `notificationAttemptCount` / `notificationAttemptAt` | outbox 已尝试次数与最近一次尝试时间 |
+| `notifiedAt` | 最近一次成功发送通知的时间 |
 
 ## 可靠性设计
 
+- **收信先落盘再 ACK**：SMTP 收到完整邮件后先 fsync 写入 `spool-dir`，成功后才回 `250`；
+  落盘失败回 `451`，让发送方稍后重试。后台 inbox relay 从 spool 消费，进程崩溃/重启后自动恢复未处理文件。
+- **通知 outbox**：MongoDB 文档写入时状态为 `PENDING`，立即发布成功更新为 `SENT`；
+  outbox 后台扫描自动重发 PENDING 记录，超过 `max-attempts` 后标记 `FAILED`（可走重发接口）。
 - **写入顺序**：S3（幂等，同 key 覆盖）→ MongoDB（原子 upsert）→ RocketMQ 通知。
-- **补偿**：若 S3 已写入但 MongoDB 写入失败，会尽力删除该 S3 对象，避免“有元数据无原件”的中间态。
+- **Mongo 结果不确定不删对象**：S3 写入成功但 MongoDB 写入失败/超时时，不再尝试删除 S3（删除可能毁掉唯一原件）；
+  对象与 spool 都被保留，由 inbox relay 自动重试，直到 Mongo 元数据写入成功。
 - **重试**：整个归档流程最多重试 `retry-max-attempts` 次（默认 3），间隔按尝试次数递增。
 - **死信**：重试仍失败时，原始邮件字节和接收上下文（信封发件人、收件人、客户端地址、错误）写入
   `app.processing.dead-letter-dir`（默认 `./data/dead-letter/`，`*.eml` + `*.json`），可手工重放。
 - **背压**：归档线程池队列满时使用 `CallerRunsPolicy`（在 SMTP 线程内同步处理），不会粗暴断开连接；
   邮件超过大小上限时返回 SMTP `552`，让发送方知道是被拒绝而不是断连。
-- **通知失败**：MongoDB/S3 都成功后通知发送失败只记日志（消息可用重发接口补发）。
+- **持久化**：compose 中 journal-archiver 的 `/app/data`（spool + 死信）挂载到命名卷。
 
 ## 健康检查
 
@@ -334,8 +350,9 @@ curl -X POST http://localhost:8080/api/journal-emails/resend \
 
 其它服务拿到 `id` 后即可用同一个值从 MongoDB 查元数据、从 S3 取原邮件。
 
-> 通知是尽力而为（best-effort）：发送失败只记录 ERROR 日志，不会回滚已经完成的 MongoDB/S3 写入，
-> 也不会影响 SMTP 服务。需要严格不丢失时，可在此基础上增加本地重试或事务消息。
+> 通知默认带 Mongo outbox：发布失败时文档保持 `PENDING`，后台扫描自动补发；
+> 超过最大重试次数后标记 `FAILED`，仍可用重发接口手工处理。发布动作不会回滚已经完成的
+> MongoDB/S3 写入，也不会影响 SMTP 服务。
 
 ## 关键设计说明
 
@@ -533,7 +550,7 @@ MCP 客户端（Claude Desktop / Cursor / 任意 MCP SDK）
 
 ```bash
 # 方式一：本地 java -jar（需先 mvn clean package；读取原件需要配置 S3）
-java -jar mail-mcp-server/target/mail-mcp-server-1.1.0.jar
+java -jar mail-mcp-server/target/mail-mcp-server-1.2.0.jar
 
 # 方式二：docker compose（与基础设施一起，自动连接容器内 Elasticsearch / MinIO）
 docker compose --profile app up -d --build mail-mcp-server
@@ -551,24 +568,28 @@ docker compose --profile app up -d --build mail-mcp-server
 ./mvnw test     # 在项目根目录运行，构建全部模块
 ```
 
-共 120 个测试，按模块分布：
+共 138 个测试，按模块分布：
 
-- **mail-common（15）**：id 生成、journal 识别、原邮件提取、邮件详情解析（含中文主题解码、
-  ReceivedTime、content-type、附件名）；
-- **journal-archiver（50）**：RocketMQ 通知（含 producer 并发首次启动）、归档流水线
+- **mail-common（18）**：id 生成、journal 识别、原邮件提取、邮件详情解析（含中文主题解码、
+  ReceivedTime、content-type、附件名），以及 HTTP 请求 `X-Request-Id` → `traceId` MDC 过滤器
+  （客户端 id 透传、缺失时自动生成、非法 id 自动替换、MDC 清理）；
+- **journal-archiver（60）**：SMTP 收信落盘 spool（含 fsync/恢复/隔离损坏文件/清理临时文件）、RocketMQ 通知
+  （含 producer 并发首次启动、traceId 作为消息用户属性传递）、Mongo outbox 自动重发与 FAILED 上限、归档流水线
   （S3→Mongo→通知顺序、原子 `$inc`、objectKey 落库、S3 失败重试、Mongo 失败补偿删除、
   缺 Message-Id 自动生成/内容摘要兜底、死信落盘）、重发服务（含缺失 id 统计与 null body 400）、
   采集过滤（sender/from/to/cc 白名单、与关系、大小写与显示名匹配）、HTTP 接口、真实 SMTP
   握手端到端测试，以及 SMTP 健康指示器、统一异常处理、`AppProperties`
   配置绑定（含 `name-server` kebab 属性）、RocketMQ producer 装配、SMTP 消息捕获与超限拒绝、
-  OpenAPI 元数据；
-- **mail-cleaner（28）**：消费成功/失败重投、批量消息部分失败、S3 读取 + 邮件解析 + 写入
+  异步 MDC 传播、OpenAPI 元数据；
+- **mail-cleaner（29）**：消费成功/失败重投、批量消息部分失败、消息 traceId 恢复与清理、
+  S3 读取 + 邮件解析 + 写入
   `mail_info` 文档，以及 RocketMQ 健康指示器、`CleanerProperties` 绑定、清洗服务
   （无效载荷、objectKey 读取、索引复用）、批量删除（存在/缺失 id、去重、空请求与数量上限、
   HTTP 400/null body 处理）、原件下载（读取、未找到 404、空 id 400、HTTP 响应头）、
   OpenAPI 元数据等用例；
-- **mail-mcp-server（27）**：ES 查询服务（分页搜索、页大小上限、计数、按 id 查询）、
-  MCP 工具（参数解析、默认分页、按 id 查询、计数）、MCP Server 装配、OpenAPI 文档生成，
+- **mail-mcp-server（31）**：ES 查询服务（分页搜索、页大小上限、计数、按 id 查询）、
+  MCP 工具（参数解析、默认分页、按 id 查询、计数、调用成功/失败指标）、对象存储健康指示器
+  （bucket 可达 / 不存在 / 端点不可达）、MCP Server 装配、OpenAPI 文档生成，
   以及邮件原件批量 zip 下载（S3 读取→临时文件→zip 内容、缺失 id 404、空请求/超上限 400、
   HTTP 响应头、临时文件按文件 TTL 自动清理、读取期间延迟删除、启动时清理残留文件）。
 
@@ -583,6 +604,17 @@ docker run --rm \
 ```
 
 > 挂载 `~/.m2` 复用本地 Maven 缓存，避免在容器内重复下载依赖。
+
+## 可观测性
+
+- **指标**：三个应用均暴露 `/actuator/health`、`/actuator/prometheus`、`/actuator/metrics`、
+  `/actuator/loggers` 及 liveness/readiness 探针；指标带 `application=<应用名>` 标签。
+- **日志关联**：HTTP 请求的 `X-Request-Id` 会写入 `traceId` MDC；SMTP 收信时为每封邮件生成
+  `traceId`；归档通知通过 RocketMQ 消息用户属性 `traceId` 传给 mail-cleaner，跨三个应用的日志
+  可用同一 traceId 串起来。异步归档/重发任务通过 MDC 装饰器继承调用方 traceId。
+- **结构化日志**：本地默认输出可读文本；以 `json` profile 启动（`SPRING_PROFILES_ACTIVE=json`，
+  docker compose 默认已开启）时输出 Logstash 格式 JSON，MDC 字段（`traceId` 等）自动进入每条日志。
+- **健康检查**：mail-mcp-server 的健康状态同时包含 Elasticsearch 与对象存储 bucket。
 
 ## 注意事项
 

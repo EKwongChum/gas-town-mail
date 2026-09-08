@@ -14,9 +14,23 @@
 | `/api/mail-originals/download` | POST | 按归档 id 批量下载邮件原件，返回 `.zip` |
 | `/v3/api-docs` | GET | OpenAPI JSON 文档 |
 | `/swagger-ui.html` | GET | Swagger UI 可视化文档 |
-| `/actuator/health` | GET | 健康检查 |
+| `/actuator/health` | GET | 健康检查（Elasticsearch + 对象存储 bucket） |
+| `/actuator/health/liveness` | GET | 存活探针（进程是否存活） |
+| `/actuator/health/readiness` | GET | 就绪探针（依赖是否可用） |
+| `/actuator/prometheus` | GET | Prometheus 指标抓取端点 |
+| `/actuator/metrics` | GET | 运行时指标（JVM / HTTP / MCP 工具调用） |
+| `/actuator/loggers` | GET | 查看与动态调整日志级别 |
 
 默认端口：`8082`（`server.port` 可配置）。
+
+### 请求关联与可观测性
+
+- 每个 HTTP / MCP 请求都会生成 `X-Request-Id`（客户端可传入自定义 id，非法字符会被替换为随机 id）并在响应头
+  回传；同一请求内的日志会带上 `traceId` MDC 字段，用于把一次 `tools/call` 的请求、日志和下游错误串起来。
+- 每次 MCP 工具调用会输出一条汇总日志（tool、outcome、durationMs），并记录 Micrometer 指标
+  `mail.mcp.tool.calls`（按 `tool` / `outcome` 标签）与 `mail.mcp.tool.duration`（按 `tool` 标签）。
+- 本地默认输出可读文本日志；以 `json` profile 启动（compose 默认已开启）会输出 Logstash 格式的
+  JSON 日志，MDC 中的 `traceId` 等字段会作为结构化字段进入每一行。
 
 ## 二、MCP 工具（Tools）
 
@@ -170,7 +184,7 @@ curl -OJ -X POST http://localhost:8082/api/mail-originals/download \
 mvn clean package
 
 # 启动（默认端口 8082，ES 默认 localhost:9200）
-java -jar mail-mcp-server/target/mail-mcp-server-1.1.0.jar
+java -jar mail-mcp-server/target/mail-mcp-server-1.2.0.jar
 ```
 
 ### Docker（docker compose）

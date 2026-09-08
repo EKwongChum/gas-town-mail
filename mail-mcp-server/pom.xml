@@ -22,7 +22,7 @@
     <parent>
         <groupId>uk.ekwong</groupId>
         <artifactId>gas-town-mail</artifactId>
-        <version>1.1.0</version>
+        <version>1.2.0</version>
     </parent>
 
     <artifactId>mail-mcp-server</artifactId>
@@ -46,6 +46,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!-- Prometheus registry so /actuator/prometheus can expose application metrics -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
         <!-- Spring MCP (Model Context Protocol): standard Streamable HTTP

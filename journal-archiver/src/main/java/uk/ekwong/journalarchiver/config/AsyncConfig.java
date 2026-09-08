@@ -34,6 +34,7 @@ public class AsyncConfig {
         executor.setMaxPoolSize(properties.getProcessing().getMaxPoolSize());
         executor.setQueueCapacity(properties.getProcessing().getQueueCapacity());
         executor.setThreadNamePrefix("journal-processing-");
+        executor.setTaskDecorator(new MdcTaskDecorator());
         // when the queue is full, run the archive inline in the SMTP handler
         // thread instead of dropping the message with a broken connection
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
@@ -48,6 +49,7 @@ public class AsyncConfig {
         executor.setMaxPoolSize(properties.getResend().getParallelism());
         executor.setQueueCapacity(properties.getResend().getQueueCapacity());
         executor.setThreadNamePrefix("resend-");
+        executor.setTaskDecorator(new MdcTaskDecorator());
         // when the queue is full, run the resend inline in the calling thread
         // instead of failing the HTTP request
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
