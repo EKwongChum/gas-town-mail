@@ -29,8 +29,8 @@ SMTP mail ──► journal-archiver ──► S3 (raw bytes)
 Archive identifiers are `Base64(sender address)_Base64(Message-Id)` and are shared by the MongoDB
 document `_id`, the S3 object key, the RocketMQ message key, and the Elasticsearch document id.
 
-See the Chinese [README](README.md) for the full configuration reference, workflow diagrams, and
-reliability notes.
+The full configuration reference, workflow diagrams, and reliability notes live in the Chinese
+[documentation index](README.md).
 
 ## Quick start
 
@@ -94,7 +94,18 @@ up 30 minutes later by default) and returns them as a `.zip` archive.
 
 ## Documentation
 
-- Full Chinese documentation: [README.md](README.md)
+The Chinese documentation is split into topic-specific files, indexed by [README.md](README.md):
+
+- Getting started: [docs/getting-started.md](docs/getting-started.md)
+- Architecture and design: [docs/architecture.md](docs/architecture.md)
+- Archiver: [docs/journal-archiver.md](docs/journal-archiver.md)
+- Cleaner: [docs/mail-cleaner.md](docs/mail-cleaner.md)
+- MCP server: [docs/mail-mcp-server.md](docs/mail-mcp-server.md)
+- Operations and observability: [docs/operations.md](docs/operations.md)
+- Development and testing: [docs/development.md](docs/development.md)
+
+Other references:
+
 - MCP server interface: [mail-mcp-server/README.md](mail-mcp-server/README.md)
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Security: [SECURITY.md](SECURITY.md)

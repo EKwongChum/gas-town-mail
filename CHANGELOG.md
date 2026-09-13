@@ -27,3 +27,5 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Archive id uses only the sender mailbox: `Alice <alice@example.com>` now encodes as
   `YWxpY2VAZXhhbXBsZS5jb20=`. Documents archived with the previous full-sender id keep their old
   `_id`; there is no automatic migration.
+- The 646-line Chinese `README.md` became a short index; the details moved to `docs/`
+  (`architecture`, `getting-started`, one page per application, `operations`, `development`).
