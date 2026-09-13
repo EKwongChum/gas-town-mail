@@ -25,19 +25,40 @@ import org.junit.jupiter.api.Test;
 class EmailIdGeneratorTest {
 
     @Test
-    void generatesBase64SenderAndMessageIdCombination() {
+    void generatesBase64SenderAddressAndMessageIdCombination() {
         String sender = "Alice <alice@example.com>";
         String messageId = "<original-123@example.com>";
 
         String id = EmailIdGenerator.generate(sender, messageId);
 
-        String expected =
-                Base64.getEncoder().encodeToString(sender.getBytes(StandardCharsets.UTF_8))
-                        + "_"
-                        + Base64.getEncoder()
-                                .encodeToString(messageId.getBytes(StandardCharsets.UTF_8));
-        assertThat(id).isEqualTo(expected);
+        String expectedSender = "YWxpY2VAZXhhbXBsZS5jb20=";
+        assertThat(expectedSender)
+                .isEqualTo(
+                        Base64.getEncoder()
+                                .encodeToString(
+                                        "alice@example.com".getBytes(StandardCharsets.UTF_8)));
+        assertThat(id)
+                .isEqualTo(
+                        expectedSender
+                                + "_"
+                                + Base64.getEncoder()
+                                        .encodeToString(
+                                                messageId.getBytes(StandardCharsets.UTF_8)));
         assertThat(id).doesNotContain("/").doesNotContain("+");
+    }
+
+    @Test
+    void usesTheSameIdForEverySenderAddressForm() {
+        String messageId = "<original-123@example.com>";
+        String expected = EmailIdGenerator.generate("alice@example.com", messageId);
+
+        assertThat(EmailIdGenerator.generate("Alice <alice@example.com>", messageId))
+                .isEqualTo(expected);
+        assertThat(EmailIdGenerator.generate("<alice@example.com>", messageId)).isEqualTo(expected);
+        assertThat(EmailIdGenerator.generate("alice@example.com (Alice)", messageId))
+                .isEqualTo(expected);
+        assertThat(EmailIdGenerator.generate(" Alice   <alice@example.com> ", messageId))
+                .isEqualTo(expected);
     }
 
     @Test

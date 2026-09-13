@@ -24,3 +24,6 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Docker images run as a non-root user, expose health checks, and pin the MinIO image version.
 - S3 access key / secret key no longer have code-level defaults; local development values are only
   applied from `application.yml` / environment variables.
+- Archive id uses only the sender mailbox: `Alice <alice@example.com>` now encodes as
+  `YWxpY2VAZXhhbXBsZS5jb20=`. Documents archived with the previous full-sender id keep their old
+  `_id`; there is no automatic migration.

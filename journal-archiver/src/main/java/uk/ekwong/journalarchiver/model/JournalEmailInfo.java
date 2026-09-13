@@ -25,7 +25,7 @@ import uk.ekwong.journalarchiver.notify.NotificationStatus;
 
 /**
  * MongoDB document holding the basic information of a journaled email. The document id equals
- * {@code Base64(sender)_Base64(Message-Id)} and is also used as the object storage key.
+ * {@code Base64(sender address)_Base64(Message-Id)} and is also used as the object storage key.
  */
 @Document(collection = "journal_emails")
 public class JournalEmailInfo {

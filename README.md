@@ -16,7 +16,7 @@
 - **journal-archiver（归档应用）**：
   1. 内嵌 SMTP 服务，监听 `0.0.0.0`，接收来自任何来源的邮件；
   2. 识别 **journal 格式**（Exchange journal report）后，把原邮件基础信息写入 **MongoDB**
-     （`_id` 为 `Base64(sender)_Base64(Message-Id)`），原邮件原始字节写入 **S3 对象存储**
+     （`_id` 为 `Base64(sender 邮箱地址)_Base64(Message-Id)`），原邮件原始字节写入 **S3 对象存储**
      （对象 key 与 MongoDB `_id` 相同）；
   3. 两者都成功后向 **RocketMQ** `mail_meta_topic` 发送通知（消息 key 为 MongoDB `_id`）；
   4. 提供 HTTP 接口按时间范围或 `_id` 列表**重发**通知。
@@ -184,8 +184,8 @@ swaks --server 127.0.0.1:2525 \
 ```text
 Received message via SMTP: client=/127.0.0.1:xxxxx, envelope sender=postmaster@corp.local, ...
 Extracted embedded original email (313 bytes)
-Saved journal email metadata to MongoDB: id=QWxpY2UgPGFsaWNlQGV4YW1wbGUuY29tPg==_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4=
-Stored email object s3://journal-emails/QWxpY2UgPGFsaWNlQGV4YW1wbGUuY29tPg==_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4=
+Saved journal email metadata to MongoDB: id=YWxpY2VAZXhhbXBsZS5jb20=_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4=
+Stored email object s3://journal-emails/YWxpY2VAZXhhbXBsZS5jb20=_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4=
 ```
 
 ## 配置（application.yml）
@@ -326,7 +326,7 @@ curl -X POST http://localhost:8080/api/journal-emails/resend \
 
 1. `objectStorageService.store(id, rawEmail)` 写入 S3（key = 同一个 id，
    `Content-Type: message/rfc822`）；
-2. `mongoTemplate.upsert(...)` 写入 MongoDB（`_id` = `Base64(sender)_Base64(Message-Id)`，
+2. `mongoTemplate.upsert(...)` 写入 MongoDB（`_id` = `Base64(sender 邮箱地址)_Base64(Message-Id)`，
    并保存 `objectKey` = id）；
 3. 两者都成功后，`RocketMailMetaPublisher` 向 `mail_meta_topic:mail-meta` 同步发送 JSON 消息。
 
@@ -335,7 +335,7 @@ curl -X POST http://localhost:8080/api/journal-emails/resend \
 
 ```json
 {
-  "id": "QWxpY2UgPGFsaWNlQGV4YW1wbGUuY29tPg==_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4=",
+  "id": "YWxpY2VAZXhhbXBsZS5jb20=_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4=",
   "sender": "Alice <alice@example.com>",
   "from": "Alice <alice@example.com>",
   "to": "Bob <bob@example.com>",
@@ -343,7 +343,7 @@ curl -X POST http://localhost:8080/api/journal-emails/resend \
   "subject": "Quarterly report",
   "messageId": "<original-123@example.com>",
   "envelopeSender": "postmaster@corp.local",
-  "objectKey": "QWxpY2UgPGFsaWNlQGV4YW1wbGUuY29tPg==_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4=",
+  "objectKey": "YWxpY2VAZXhhbXBsZS5jb20=_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4=",
   "receivedAt": "2026-08-16T05:00:00Z"
 }
 ```
@@ -359,19 +359,26 @@ curl -X POST http://localhost:8080/api/journal-emails/resend \
 ### id 格式
 
 ```text
-Base64(sender)_Base64(Message-Id)
+Base64(sender 邮箱地址)_Base64(Message-Id)
 ```
+
+sender 只取**邮箱地址部分**：`Alice <alice@example.com>`、`<alice@example.com>`、
+`alice@example.com (Alice)` 都按 `alice@example.com` 参与计算，因此同一发件人的不同写法
+（显示名有无、多余空白）会得到同一个 id。
 
 例如 `sender = Alice <alice@example.com>`、`Message-Id = <original-123@example.com>` 时：
 
 ```text
-QWxpY2UgPGFsaWNlQGV4YW1wbGUuY29tPg==_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4=
+YWxpY2VAZXhhbXBsZS5jb20=_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4=
 ```
 
 该值同时作为 MongoDB 文档 `_id` 和 S3 对象 key（`Content-Type: message/rfc822`）。
 
 > 原邮件没有 `Message-Id` 且 `app.journal.generate-message-id-if-missing` 为 `false` 时，
 > 第二段改用原邮件原始字节的 SHA-256 摘要，避免同一 sender 的多封无 Message-Id 邮件互相覆盖。
+
+> 该规则在 1.2.0 之后变更：早期版本对完整 sender（含显示名）取 Base64，历史文档的 `_id`
+> 仍是旧格式，不会自动迁移。若同一封旧邮件被重新投递，会按新规则生成新 `_id` 而产生重复文档。
 
 ### journal 格式识别
 
@@ -508,7 +515,7 @@ curl -X POST http://localhost:8081/api/mail-info/delete \
 调用示例：
 
 ```bash
-curl -OJ "http://localhost:8081/api/mail-info/original?id=QWxpY2UgPGFsaWNlQGV4YW1wbGUuY29tPg==_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4="
+curl -OJ "http://localhost:8081/api/mail-info/original?id=YWxpY2VAZXhhbXBsZS5jb20=_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4="
 ```
 
 ## mail-mcp-server 应用

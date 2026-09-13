@@ -200,8 +200,7 @@ class JournalProcessingServiceTest {
                 .isEqualTo(
                         Base64.getEncoder()
                                 .encodeToString(
-                                        "Alice <alice@example.com>"
-                                                .getBytes(StandardCharsets.UTF_8)));
+                                        "alice@example.com".getBytes(StandardCharsets.UTF_8)));
         String decodedMessageId =
                 new String(Base64.getDecoder().decode(parts[1]), StandardCharsets.UTF_8);
         assertThat(decodedMessageId).startsWith("<").endsWith("@journal-archiver.local>");

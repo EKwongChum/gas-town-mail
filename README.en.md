@@ -26,8 +26,8 @@ SMTP mail ──► journal-archiver ──► S3 (raw bytes)
                   └──► RocketMQ ──► mail-cleaner ──► Elasticsearch ──► mail-mcp-server ──► MCP clients
 ```
 
-Archive identifiers are `Base64(sender)_Base64(Message-Id)` and are shared by the MongoDB document
-`_id`, the S3 object key, the RocketMQ message key, and the Elasticsearch document id.
+Archive identifiers are `Base64(sender address)_Base64(Message-Id)` and are shared by the MongoDB
+document `_id`, the S3 object key, the RocketMQ message key, and the Elasticsearch document id.
 
 See the Chinese [README](README.md) for the full configuration reference, workflow diagrams, and
 reliability notes.
