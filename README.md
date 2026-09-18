@@ -26,4 +26,20 @@ docker compose up -d && ./mvnw clean package
 | [运维与可观测性](docs/operations.md) | 健康检查、指标、traceId、注意事项 |
 | [开发与测试](docs/development.md) | 测试分布与贡献方式 |
 
+## 邮箱系统接入
+
+当前 Coremail、Exchange 等邮箱系统均支持以 **journal 格式**进行邮件归档，只需把 journal
+投递目标指向 journal-archiver 的 SMTP 服务（默认 `2525` 端口，见
+[journal-archiver 配置项](docs/journal-archiver.md)）。
+
+**Coremail 系统**
+
+1. 修改 `programs.cf` 配置的 `[deliveragent/transport]` 段，配置虚拟域名指向 journal-archiver 服务；
+2. 修改 `mail_journal.cf`，配置需要归档的范围；
+3. 重启所有 deliveragent。
+
+**Exchange 邮箱系统**
+
+请在控制台配置 journal 归档日志投递。
+
 代码完全由 DeepSeek V4 生成，非人工编写；基于 [Apache License 2.0](LICENSE) 开源。

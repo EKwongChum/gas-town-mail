@@ -16,6 +16,8 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - SHA-256 digest of the original `.eml` bytes: the archiver computes it per received mail, stores
   it in MongoDB (`sha256`) and publishes it in the `mail_meta_topic` payload; the cleaner indexes
   it in Elasticsearch (`mail_info.sha256`), and the MCP query tools return it.
+- The Chinese and English READMEs now document how to enable journal archiving on Coremail
+  (`programs.cf` / `mail_journal.cf`) and Exchange (admin console journal delivery).
 - Community and governance files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`,
   `CHANGELOG.md`, issue/PR templates, and `CODEOWNERS`.
 - Dependabot configuration for Maven, GitHub Actions, and Docker.
