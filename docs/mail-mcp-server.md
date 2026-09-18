@@ -26,8 +26,8 @@ MCP 客户端（Claude Desktop / Cursor / 任意 MCP SDK）
 
 | 工具 | 说明 |
 | --- | --- |
-| `search_mails` | 分页搜索：keyword（subject/sender/from/to/messageId）、精确地址、Message-Id、时间范围 |
-| `get_mail_by_id` | 按归档 id（MongoDB `_id` / S3 key）查询单封邮件 |
+| `search_mails` | 分页搜索：keyword（subject/sender/from/to/messageId）、精确地址、Message-Id、时间范围；返回的每封邮件都带 `sha256` |
+| `get_mail_by_id` | 按归档 id（MongoDB `_id` / S3 key）查询单封邮件，返回字段含 `sha256` |
 | `count_mails` | 统计符合条件的邮件数量 |
 
 ## 接口文档

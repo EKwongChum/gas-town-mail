@@ -37,9 +37,13 @@ import uk.ekwong.mailcleaner.CleanerTestEmails;
 import uk.ekwong.mailcommon.es.MailInfoDocument;
 import uk.ekwong.mailcommon.mail.EmailDetailsExtractor;
 import uk.ekwong.mailcommon.mail.MailMetaMessage;
+import uk.ekwong.mailcommon.mail.Sha256;
 import uk.ekwong.mailcommon.storage.ObjectStorageService;
 
 class MailCleaningServiceTest {
+
+    private static final String SHA256 =
+            "3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b";
 
     private final ObjectStorageService storage = mock(ObjectStorageService.class);
     private final EmailDetailsExtractor extractor = new EmailDetailsExtractor();
@@ -75,10 +79,27 @@ class MailCleaningServiceTest {
         assertThat(doc.getTo()).isEqualTo("Bob <bob@example.com>");
         assertThat(doc.getCc()).isEqualTo("Carol <carol@example.com>");
         assertThat(doc.getMessageId()).isEqualTo("<attach-001@example.com>");
+        assertThat(doc.getSha256()).isEqualTo(SHA256);
         assertThat(doc.getReceivedTime()).isEqualTo(Instant.parse("2026-08-14T00:30:00Z"));
         assertThat(doc.getSubject()).isEqualTo("Project files");
         assertThat(doc.getContentType()).contains("multipart/mixed");
         assertThat(doc.getAttachmentNames()).containsExactly("report.pdf", "notes.txt");
+    }
+
+    @Test
+    void computesSha256WhenNotificationDoesNotCarryOne() throws Exception {
+        String objectKey = "id-without-sha256";
+        byte[] raw = CleanerTestEmails.emailWithAttachments().getBytes(StandardCharsets.UTF_8);
+        when(storage.read(objectKey)).thenReturn(raw);
+        IndexOperations indexOperations = mock(IndexOperations.class);
+        when(elasticsearchOperations.indexOps(MailInfoDocument.class)).thenReturn(indexOperations);
+        when(indexOperations.exists()).thenReturn(true);
+
+        service.clean(mapper.writeValueAsString(meta(objectKey, null)), objectKey);
+
+        ArgumentCaptor<MailInfoDocument> captor = ArgumentCaptor.forClass(MailInfoDocument.class);
+        verify(elasticsearchOperations).save(captor.capture());
+        assertThat(captor.getValue().getSha256()).isEqualTo(Sha256.hex(raw));
     }
 
     @Test
@@ -137,6 +158,10 @@ class MailCleaningServiceTest {
     }
 
     private MailMetaMessage meta(String id) {
+        return meta(id, SHA256);
+    }
+
+    private MailMetaMessage meta(String id, String sha256) {
         return new MailMetaMessage(
                 id,
                 "Alice <alice@example.com>",
@@ -147,6 +172,7 @@ class MailCleaningServiceTest {
                 "<attach-001@example.com>",
                 "postmaster@corp.local",
                 id,
+                sha256,
                 Instant.parse("2026-08-16T05:00:00Z"),
                 Instant.parse("2026-08-16T05:00:00Z"),
                 Instant.parse("2026-08-16T05:00:00Z"),
@@ -164,6 +190,7 @@ class MailCleaningServiceTest {
                 "<attach-001@example.com>",
                 "postmaster@corp.local",
                 objectKey,
+                SHA256,
                 Instant.parse("2026-08-16T05:00:00Z"),
                 Instant.parse("2026-08-16T05:00:00Z"),
                 Instant.parse("2026-08-16T05:00:00Z"),

@@ -28,6 +28,7 @@ RocketMQ mail_meta_topic ──► MailMetaConsumer（DefaultMQPushConsumer）
 | `id` | 归档 id（MongoDB `_id` / S3 对象 key），重复消费同一消息会覆盖同一文档 |
 | `sender` / `from` / `to` / `cc` | 地址字段 |
 | `messageId` | 原邮件 `Message-Id` |
+| `sha256` | 原邮件 `.eml` 的 SHA-256 摘要（小写 hex），来自归档通知；通知未携带该字段时由清洗服务读取对象后自行计算；与对象实际内容不一致时记录 WARN 日志 |
 | `receivedTime` | 原邮件 `Date` 头解析出的时间（ISO-8601） |
 | `subject` | 主题（RFC 2047 解码） |
 | `contentType` | MIME `Content-Type` |
@@ -49,8 +50,9 @@ RocketMQ mail_meta_topic ──► MailMetaConsumer（DefaultMQPushConsumer）
 应用启动时不依赖 Elasticsearch / RocketMQ 在线（客户端懒连接、消费者启动失败会按固定间隔自动重试，
 无需重启）；`/actuator/health` 包含 Elasticsearch 与 RocketMQ 消费者两个健康指示器。
 处理失败的消息由 RocketMQ 按消费者组重投，索引缺失时会在下一条消息时自动补建。
-`mail_info` 已显式定义映射：地址类字段与附件名为 keyword（精确匹配），主题为 text（全文检索），
-时间为 date。
+`mail_info` 已显式定义映射：地址类字段、`messageId`、`sha256` 与附件名为 keyword（精确匹配），
+主题为 text（全文检索），时间为 date。已有索引不会自动补建新字段的显式映射，动态映射仍会
+写入该字段；需要严格 keyword 映射时可删除索引后由下一条消息重建。
 
 ## HTTP 批量删除接口
 

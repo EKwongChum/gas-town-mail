@@ -76,7 +76,8 @@ public class MailQueryTools {
                                         + "All filters are optional and combined with AND. When keyword is provided it is "
                                         + "matched against subject, sender, from, to and message id. "
                                         + "Times are ISO-8601 instants (e.g. 2026-08-23T08:00:00Z). "
-                                        + "Returns a JSON object with the total count and the documents on the requested page.")
+                                        + "Returns a JSON object with the total count and the documents on the requested page; "
+                                        + "each document includes sha256, the digest of the archived original .eml file.")
                         .inputSchema(
                                 jsonSchema(
                                         List.of(
@@ -132,6 +133,8 @@ public class MailQueryTools {
                         .description(
                                 "Returns the archived email document with the given archive id "
                                         + "(MongoDB document id / object storage key) from the Elasticsearch mail_info index. "
+                                        + "The document includes sender, from, to, cc, messageId, receivedTime, subject, "
+                                        + "contentType, attachmentNames and sha256 (the digest of the original .eml file). "
                                         + "Returns the document as JSON, or an error when it does not exist.")
                         .inputSchema(
                                 jsonSchema(

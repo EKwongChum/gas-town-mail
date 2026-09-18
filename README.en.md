@@ -32,6 +32,23 @@ document `_id`, the S3 object key, the RocketMQ message key, and the Elasticsear
 The full configuration reference, workflow diagrams, and reliability notes live in the Chinese
 [documentation index](README.md).
 
+## Journal archiving in mail systems
+
+Coremail, Exchange and other mail systems support archiving mail in **journal format**. Point the
+journal delivery target at the journal-archiver SMTP service (port `2525` by default, see the
+[journal-archiver configuration](docs/journal-archiver.md)).
+
+**Coremail**
+
+1. Edit the `[deliveragent/transport]` section of `programs.cf` and configure a virtual domain that
+   points to the journal-archiver service.
+2. Edit `mail_journal.cf` to configure the scope of the mail to archive.
+3. Restart all deliveragents.
+
+**Exchange**
+
+Configure journal log delivery in the Exchange admin console.
+
 ## Quick start
 
 Requirements: JDK 17 and Docker with Compose.

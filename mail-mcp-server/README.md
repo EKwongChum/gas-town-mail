@@ -56,7 +56,7 @@ subject / sender / from / to / messageId（至少命中一个）。
 
 返回：JSON 对象，包含 `total`（命中总数）和 `documents`（当前页文档数组）。
 文档字段：`id`、`sender`、`from`、`to`、`cc`、`messageId`、`receivedTime`、
-`subject`、`contentType`、`attachmentNames`。
+`subject`、`contentType`、`attachmentNames`、`sha256`（原邮件 `.eml` 的 SHA-256 摘要）。
 
 ### 2. `get_mail_by_id` — 按归档 id 查询单封邮件
 
@@ -64,7 +64,7 @@ subject / sender / from / to / messageId（至少命中一个）。
 | --- | --- | --- | --- |
 | `id` | string | 是 | 归档 id（MongoDB `_id` / 对象存储 key） |
 
-返回：该文档的 JSON；不存在时返回 `isError=true` 的错误文本。
+返回：该文档的 JSON（字段同上，含 `sha256`）；不存在时返回 `isError=true` 的错误文本。
 
 ### 3. `count_mails` — 统计符合条件的邮件数量
 

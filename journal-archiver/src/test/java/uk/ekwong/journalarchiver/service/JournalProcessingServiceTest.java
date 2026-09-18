@@ -46,6 +46,7 @@ import uk.ekwong.mailcommon.mail.EmailDetailsExtractor;
 import uk.ekwong.mailcommon.mail.EmailIdGenerator;
 import uk.ekwong.mailcommon.mail.JournalDetector;
 import uk.ekwong.mailcommon.mail.OriginalEmailExtractor;
+import uk.ekwong.mailcommon.mail.Sha256;
 import uk.ekwong.mailcommon.storage.ObjectStorageService;
 
 class JournalProcessingServiceTest {
@@ -74,12 +75,15 @@ class JournalProcessingServiceTest {
                                 null);
 
         assertThat(handled).isTrue();
-        verify(storage).store(eq(expectedId), any(byte[].class));
+        ArgumentCaptor<byte[]> objectCaptor = ArgumentCaptor.forClass(byte[].class);
+        verify(storage).store(eq(expectedId), objectCaptor.capture());
         ArgumentCaptor<Update> updateCaptor = ArgumentCaptor.forClass(Update.class);
         verify(mongoTemplate)
                 .upsert(any(Query.class), updateCaptor.capture(), eq(JournalEmailInfo.class));
         Document set = (Document) updateCaptor.getValue().getUpdateObject().get("$set");
         assertThat(set).containsEntry("objectKey", expectedId);
+        // the stored .eml bytes and the persisted digest must match
+        assertThat(set).containsEntry("sha256", Sha256.hex(objectCaptor.getValue()));
         assertThat(set.get("notificationStatus").toString()).isEqualTo("PENDING");
         verify(publisher).publish(saved);
         ArgumentCaptor<Update> sentUpdateCaptor = ArgumentCaptor.forClass(Update.class);

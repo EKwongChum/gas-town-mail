@@ -80,6 +80,7 @@ class RocketMailMetaPublisherTest {
                 .contains("\"id\":\"" + info.getId() + "\"")
                 .contains("\"messageId\":\"<m-1@example.com>\"")
                 .contains("\"objectKey\":\"" + info.getObjectKey() + "\"")
+                .contains("\"sha256\":\"" + info.getSha256() + "\"")
                 .contains("\"modificationCount\":3");
     }
 
@@ -192,6 +193,7 @@ class RocketMailMetaPublisherTest {
         info.setMessageId("<m-1@example.com>");
         info.setEnvelopeSender("postmaster@corp.local");
         info.setObjectKey(info.getId());
+        info.setSha256("3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b");
         info.setReceivedAt(Instant.parse("2026-08-16T05:00:00Z"));
         info.setCreatedAt(Instant.parse("2026-08-16T05:00:00Z"));
         info.setUpdatedAt(Instant.parse("2026-08-16T06:00:00Z"));

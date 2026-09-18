@@ -21,7 +21,8 @@ import java.time.Instant;
 /**
  * Payload published to RocketMQ after an email has been archived, so other services know the email
  * metadata (MongoDB) and the raw email (object storage) are available. The {@code id} is both the
- * MongoDB document id and the object storage key.
+ * MongoDB document id and the object storage key. {@code sha256} is the digest of the stored
+ * original email bytes.
  */
 public record MailMetaMessage(
         String id,
@@ -33,6 +34,7 @@ public record MailMetaMessage(
         String messageId,
         String envelopeSender,
         String objectKey,
+        String sha256,
         Instant receivedAt,
         Instant createdAt,
         Instant updatedAt,

@@ -37,6 +37,10 @@ public class JournalEmailInfo {
     private String cc;
     private String subject;
     private String messageId;
+
+    /** SHA-256 digest (lowercase hex) of the original email bytes stored in object storage. */
+    private String sha256;
+
     private String envelopeSender;
     private List<String> recipients;
     private String clientAddress;
@@ -104,6 +108,14 @@ public class JournalEmailInfo {
 
     public void setMessageId(String messageId) {
         this.messageId = messageId;
+    }
+
+    public String getSha256() {
+        return sha256;
+    }
+
+    public void setSha256(String sha256) {
+        this.sha256 = sha256;
     }
 
     public String getEnvelopeSender() {

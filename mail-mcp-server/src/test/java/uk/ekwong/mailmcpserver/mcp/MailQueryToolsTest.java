@@ -42,6 +42,9 @@ import uk.ekwong.mailmcpserver.service.SearchResult;
 
 class MailQueryToolsTest {
 
+    private static final String SHA256 =
+            "3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b";
+
     private final EmailQueryService queryService = mock(EmailQueryService.class);
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private final MailQueryTools tools =
@@ -64,6 +67,7 @@ class MailQueryToolsTest {
                         "Bob <bob@example.com>",
                         null,
                         "<original-123@example.com>",
+                        SHA256,
                         Instant.parse("2026-08-01T00:00:00Z"),
                         "Quarterly report",
                         "text/plain",
@@ -131,6 +135,7 @@ class MailQueryToolsTest {
         assertThat(result.isError()).isFalse();
         assertThat(text(result))
                 .contains("\"messageId\":\"<original-123@example.com>\"")
+                .contains("\"sha256\":\"" + SHA256 + "\"")
                 .contains("Quarterly report");
     }
 

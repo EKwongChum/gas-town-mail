@@ -48,6 +48,10 @@ public class MailInfoDocument {
     @Field(type = FieldType.Keyword)
     private String messageId;
 
+    /** SHA-256 of the original {@code .eml} object, copied from the archive metadata. */
+    @Field(type = FieldType.Keyword)
+    private String sha256;
+
     @Field(type = FieldType.Date)
     private Instant receivedTime;
 
@@ -69,6 +73,7 @@ public class MailInfoDocument {
             String to,
             String cc,
             String messageId,
+            String sha256,
             Instant receivedTime,
             String subject,
             String contentType,
@@ -80,6 +85,7 @@ public class MailInfoDocument {
         doc.to = to;
         doc.cc = cc;
         doc.messageId = messageId;
+        doc.sha256 = sha256;
         doc.receivedTime = receivedTime;
         doc.subject = subject;
         doc.contentType = contentType;
@@ -133,6 +139,14 @@ public class MailInfoDocument {
 
     public void setMessageId(String messageId) {
         this.messageId = messageId;
+    }
+
+    public String getSha256() {
+        return sha256;
+    }
+
+    public void setSha256(String sha256) {
+        this.sha256 = sha256;
     }
 
     public Instant getReceivedTime() {
