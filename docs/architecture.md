@@ -88,7 +88,7 @@ YWxpY2VAZXhhbXBsZS5jb20=_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4=
 > 原邮件没有 `Message-Id` 且 `app.journal.generate-message-id-if-missing` 为 `false` 时，
 > 第二段改用原邮件原始字节的 SHA-256 摘要，避免同一 sender 的多封无 Message-Id 邮件互相覆盖。
 
-> 该规则在 1.2.0 之后变更：早期版本对完整 sender（含显示名）取 Base64，历史文档的 `_id`
+> 该规则在 2.0.0 变更：早期版本对完整 sender（含显示名）取 Base64，历史文档的 `_id`
 > 仍是旧格式，不会自动迁移。若同一封旧邮件被重新投递，会按新规则生成新 `_id` 而产生重复文档。
 
 ### journal 格式识别

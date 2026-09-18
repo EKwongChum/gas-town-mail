@@ -7,9 +7,7 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-> The next release is planned as **2.0.0**: the archive-id rule change below is breaking. The
-> `v0.1.0`–`v1.2.0` releases were tagged without splitting this section per version, so their
-> entries are still listed here; `pom.xml` keeps the released `1.2.0` until the release commit.
+## [2.0.0] - 2026-09-18
 
 ### Added
 
@@ -18,6 +16,22 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it in Elasticsearch (`mail_info.sha256`), and the MCP query tools return it.
 - The Chinese and English READMEs now document how to enable journal archiving on Coremail
   (`programs.cf` / `mail_journal.cf`) and Exchange (admin console journal delivery).
+
+### Changed
+
+- **Breaking**: archive id uses only the sender mailbox: `Alice <alice@example.com>` now encodes as
+  `YWxpY2VAZXhhbXBsZS5jb20=`. Documents archived with the previous full-sender id keep their old
+  `_id`; there is no automatic migration.
+- The 646-line Chinese `README.md` became a short index; the details moved to `docs/`
+  (`architecture`, `getting-started`, one page per application, `operations`, `development`).
+
+## Released in v0.1.0 – v1.2.0
+
+> These releases were tagged without splitting the changelog per version, so their entries are
+> collected here instead of under individual version headings.
+
+### Added
+
 - Community and governance files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`,
   `CHANGELOG.md`, issue/PR templates, and `CODEOWNERS`.
 - Dependabot configuration for Maven, GitHub Actions, and Docker.
@@ -32,8 +46,3 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Docker images run as a non-root user, expose health checks, and pin the MinIO image version.
 - S3 access key / secret key no longer have code-level defaults; local development values are only
   applied from `application.yml` / environment variables.
-- Archive id uses only the sender mailbox: `Alice <alice@example.com>` now encodes as
-  `YWxpY2VAZXhhbXBsZS5jb20=`. Documents archived with the previous full-sender id keep their old
-  `_id`; there is no automatic migration.
-- The 646-line Chinese `README.md` became a short index; the details moved to `docs/`
-  (`architecture`, `getting-started`, one page per application, `operations`, `development`).

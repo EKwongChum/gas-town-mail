@@ -8,25 +8,27 @@
 ./mvnw test     # 在项目根目录运行，构建全部模块
 ```
 
-共 138 个测试，按模块分布：
+共 142 个测试，按模块分布：
 
-- **mail-common（18）**：id 生成、journal 识别、原邮件提取、邮件详情解析（含中文主题解码、
-  ReceivedTime、content-type、附件名），以及 HTTP 请求 `X-Request-Id` → `traceId` MDC 过滤器
-  （客户端 id 透传、缺失时自动生成、非法 id 自动替换、MDC 清理）；
+- **mail-common（21）**：id 生成、journal 识别、原邮件提取、邮件详情解析（含中文主题解码、
+  ReceivedTime、content-type、附件名）、原邮件字节的 SHA-256 摘要计算，以及 HTTP 请求
+  `X-Request-Id` → `traceId` MDC 过滤器（客户端 id 透传、缺失时自动生成、非法 id 自动替换、
+  MDC 清理）；
 - **journal-archiver（60）**：SMTP 收信落盘 spool（含 fsync/恢复/隔离损坏文件/清理临时文件）、RocketMQ 通知
   （含 producer 并发首次启动、traceId 作为消息用户属性传递）、Mongo outbox 自动重发与 FAILED 上限、归档流水线
   （S3→Mongo→通知顺序、原子 `$inc`、objectKey 落库、S3 失败重试、Mongo 失败补偿删除、
-  缺 Message-Id 自动生成/内容摘要兜底、死信落盘）、重发服务（含缺失 id 统计与 null body 400）、
+  缺 Message-Id 自动生成/内容摘要兜底、sha256 落库、死信落盘）、重发服务（含缺失 id 统计与
+  null body 400）、
   采集过滤（sender/from/to/cc 白名单、与关系、大小写与显示名匹配）、HTTP 接口、真实 SMTP
   握手端到端测试，以及 SMTP 健康指示器、统一异常处理、`AppProperties`
   配置绑定（含 `name-server` kebab 属性）、RocketMQ producer 装配、SMTP 消息捕获与超限拒绝、
   异步 MDC 传播、OpenAPI 元数据；
-- **mail-cleaner（29）**：消费成功/失败重投、批量消息部分失败、消息 traceId 恢复与清理、
+- **mail-cleaner（30）**：消费成功/失败重投、批量消息部分失败、消息 traceId 恢复与清理、
   S3 读取 + 邮件解析 + 写入
   `mail_info` 文档，以及 RocketMQ 健康指示器、`CleanerProperties` 绑定、清洗服务
-  （无效载荷、objectKey 读取、索引复用）、批量删除（存在/缺失 id、去重、空请求与数量上限、
-  HTTP 400/null body 处理）、原件下载（读取、未找到 404、空 id 400、HTTP 响应头）、
-  OpenAPI 元数据等用例；
+  （无效载荷、objectKey 读取、索引复用、sha256 取自通知或回退计算）、批量删除（存在/缺失 id、
+  去重、空请求与数量上限、HTTP 400/null body 处理）、原件下载（读取、未找到 404、空 id 400、
+  HTTP 响应头）、OpenAPI 元数据等用例；
 - **mail-mcp-server（31）**：ES 查询服务（分页搜索、页大小上限、计数、按 id 查询）、
   MCP 工具（参数解析、默认分页、按 id 查询、计数、调用成功/失败指标）、对象存储健康指示器
   （bucket 可达 / 不存在 / 端点不可达）、MCP Server 装配、OpenAPI 文档生成，

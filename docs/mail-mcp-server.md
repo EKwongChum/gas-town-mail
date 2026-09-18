@@ -39,7 +39,7 @@ MCP 客户端（Claude Desktop / Cursor / 任意 MCP SDK）
 
 ```bash
 # 方式一：本地 java -jar（需先 mvn clean package；读取原件需要配置 S3）
-java -jar mail-mcp-server/target/mail-mcp-server-1.2.0.jar
+java -jar mail-mcp-server/target/mail-mcp-server-2.0.0.jar
 
 # 方式二：docker compose（与基础设施一起，自动连接容器内 Elasticsearch / MinIO）
 docker compose --profile app up -d --build mail-mcp-server
