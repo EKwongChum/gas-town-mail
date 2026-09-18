@@ -10,18 +10,21 @@
   1. 内嵌 SMTP 服务，监听 `0.0.0.0`，接收来自任何来源的邮件；
   2. 识别 **journal 格式**（Exchange journal report）后，把原邮件基础信息写入 **MongoDB**
      （`_id` 为 `Base64(sender 邮箱地址)_Base64(Message-Id)`），原邮件原始字节写入 **S3 对象存储**
-     （对象 key 与 MongoDB `_id` 相同）；
+     （对象 key 与 MongoDB `_id` 相同），并计算原始字节的 **SHA-256**（`sha256`，小写 hex）
+     一并存入 MongoDB；
   3. 两者都成功后向 **RocketMQ** `mail_meta_topic` 发送通知（消息 key 为 MongoDB `_id`）；
   4. 提供 HTTP 接口按时间范围或 `_id` 列表**重发**通知。
 - **mail-cleaner（清洗应用）**：
   1. 订阅 RocketMQ `mail_meta_topic`；
   2. 收到消息后从对象存储读取邮件本体，解析出 sender / from / to / cc / Message-Id / ReceivedTime /
-     subject / content-type / 所有附件名称，写入 **Elasticsearch** 的 `mail_info` 索引；
+     subject / content-type / 所有附件名称，连同归档通知携带的 **sha256** 一起写入
+     **Elasticsearch** 的 `mail_info` 索引；
   3. 提供 HTTP 接口按归档 id 从对象存储**下载邮件原件（.eml）**。
 - **mail-mcp-server（MCP 查询应用）**：
   1. 基于 Spring MCP 系列依赖（`mcp-spring-webmvc`）提供**标准 MCP Streamable HTTP 接口**（`/mcp`）；
   2. 通过 MCP 工具从 **Elasticsearch** `mail_info` 索引查询归档邮件元数据
-     （关键词 / 收发件人 / Message-Id / 时间范围检索、按 id 查询、计数）；
+     （关键词 / 收发件人 / Message-Id / 时间范围检索、按 id 查询、计数），
+     返回结果中包含原邮件的 `sha256`；
   3. 提供 HTTP 接口按归档 id 从对象存储批量下载邮件原件，打包为 `.zip` 返回。
 
 ```text

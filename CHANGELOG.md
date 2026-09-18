@@ -7,8 +7,15 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+> The next release is planned as **2.0.0**: the archive-id rule change below is breaking. The
+> `v0.1.0`–`v1.2.0` releases were tagged without splitting this section per version, so their
+> entries are still listed here; `pom.xml` keeps the released `1.2.0` until the release commit.
+
 ### Added
 
+- SHA-256 digest of the original `.eml` bytes: the archiver computes it per received mail, stores
+  it in MongoDB (`sha256`) and publishes it in the `mail_meta_topic` payload; the cleaner indexes
+  it in Elasticsearch (`mail_info.sha256`), and the MCP query tools return it.
 - Community and governance files: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`,
   `CHANGELOG.md`, issue/PR templates, and `CODEOWNERS`.
 - Dependabot configuration for Maven, GitHub Actions, and Docker.
@@ -19,7 +26,6 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Project version aligned to `0.1.0` for the first experimental release.
 - CI now uploads JaCoCo coverage reports and runs the Spotless format check.
 - Docker images run as a non-root user, expose health checks, and pin the MinIO image version.
 - S3 access key / secret key no longer have code-level defaults; local development values are only

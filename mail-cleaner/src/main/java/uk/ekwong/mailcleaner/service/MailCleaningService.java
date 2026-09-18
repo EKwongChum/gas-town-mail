@@ -32,6 +32,7 @@ import uk.ekwong.mailcommon.es.MailInfoDocument;
 import uk.ekwong.mailcommon.mail.EmailDetails;
 import uk.ekwong.mailcommon.mail.EmailDetailsExtractor;
 import uk.ekwong.mailcommon.mail.MailMetaMessage;
+import uk.ekwong.mailcommon.mail.Sha256;
 import uk.ekwong.mailcommon.storage.ObjectStorageService;
 
 /**
@@ -73,6 +74,7 @@ public class MailCleaningService {
                             : meta.id();
 
             byte[] raw = objectStorageService.read(objectKey);
+            String sha256 = resolveSha256(meta, raw);
             MimeMessage message =
                     new MimeMessage(
                             Session.getInstance(new Properties()), new ByteArrayInputStream(raw));
@@ -98,6 +100,7 @@ public class MailCleaningService {
                             extracted.to(),
                             extracted.cc(),
                             extracted.messageId(),
+                            sha256,
                             extracted.receivedTime(),
                             extracted.subject(),
                             extracted.contentType(),
@@ -105,13 +108,39 @@ public class MailCleaningService {
             ensureIndex();
             elasticsearchOperations.save(doc);
             log.info(
-                    "Saved cleaned email to Elasticsearch mail_info: id={}, messageId={}",
+                    "Saved cleaned email to Elasticsearch mail_info: id={}, messageId={}, sha256={}",
                     doc.getId(),
-                    doc.getMessageId());
+                    doc.getMessageId(),
+                    doc.getSha256());
         } catch (Exception e) {
             log.error("Failed to clean email (message key={})", messageKey, e);
             throw new MailCleanException("Failed to clean email, message key=" + messageKey, e);
         }
+    }
+
+    /**
+     * Returns the digest of the original {@code .eml}. The archiver's value is authoritative,
+     * because it is what MongoDB stores; notifications published before the field existed fall back
+     * to hashing the bytes just read from object storage. A mismatch means the stored object no
+     * longer matches the archived metadata and is logged so it can be investigated.
+     */
+    private String resolveSha256(MailMetaMessage meta, byte[] raw) {
+        String archived = meta.sha256();
+        if (archived == null || archived.isBlank()) {
+            log.debug(
+                    "Notification for id={} carries no sha256; computing it from object storage",
+                    meta.id());
+            return Sha256.hex(raw);
+        }
+        String computed = Sha256.hex(raw);
+        if (!archived.equalsIgnoreCase(computed)) {
+            log.warn(
+                    "SHA-256 mismatch for id={}: MongoDB/notification reports {} but object storage content hashes to {}",
+                    meta.id(),
+                    archived,
+                    computed);
+        }
+        return archived;
     }
 
     /**

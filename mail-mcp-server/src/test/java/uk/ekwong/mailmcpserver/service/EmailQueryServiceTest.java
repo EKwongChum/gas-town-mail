@@ -36,6 +36,9 @@ import uk.ekwong.mailcommon.es.MailInfoDocument;
 
 class EmailQueryServiceTest {
 
+    private static final String SHA256 =
+            "3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b";
+
     private final ElasticsearchOperations operations = mock(ElasticsearchOperations.class);
     private final EmailQueryService service = new EmailQueryService(operations);
 
@@ -47,6 +50,7 @@ class EmailQueryServiceTest {
                 "to@example.com",
                 null,
                 "<message-1@example.com>",
+                SHA256,
                 Instant.parse("2026-08-01T00:00:00Z"),
                 "Weekly report",
                 "multipart/mixed",

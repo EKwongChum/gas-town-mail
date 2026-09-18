@@ -22,10 +22,7 @@ import jakarta.mail.internet.MimeMessage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
@@ -47,6 +44,7 @@ import uk.ekwong.mailcommon.mail.EmailIdGenerator;
 import uk.ekwong.mailcommon.mail.JournalDetector;
 import uk.ekwong.mailcommon.mail.OriginalEmail;
 import uk.ekwong.mailcommon.mail.OriginalEmailExtractor;
+import uk.ekwong.mailcommon.mail.Sha256;
 import uk.ekwong.mailcommon.storage.ObjectStorageService;
 
 /**
@@ -173,6 +171,7 @@ public class JournalProcessingService {
         OriginalEmail original =
                 originalEmailExtractor.extractOriginal(
                         received, rawMessage, journalConfig.isExtractOriginalAttachment());
+        String sha256 = Sha256.hex(original.raw());
         EmailDetails details =
                 emailDetailsExtractor.extract(
                         original.message(), envelopeSender, journalConfig.getSenderResolution());
@@ -202,8 +201,7 @@ public class JournalProcessingService {
                     "Original message has no Message-Id and generation is disabled; "
                             + "using a content digest as the archive id suffix");
         }
-        String archiveIdSuffix =
-                isBlank(messageId) ? contentDigestMessageId(original.raw()) : messageId;
+        String archiveIdSuffix = isBlank(messageId) ? contentDigestMessageId(sha256) : messageId;
         String id = EmailIdGenerator.generate(details.sender(), archiveIdSuffix);
 
         // Object storage first: it is idempotent (same key overwrites), so
@@ -212,7 +210,15 @@ public class JournalProcessingService {
         objectStorageService.store(id, original.raw());
         JournalEmailInfo info;
         try {
-            info = saveMetadata(id, details, messageId, envelopeSender, recipients, clientAddress);
+            info =
+                    saveMetadata(
+                            id,
+                            sha256,
+                            details,
+                            messageId,
+                            envelopeSender,
+                            recipients,
+                            clientAddress);
         } catch (RuntimeException e) {
             log.warn(
                     "Metadata write failed after S3 object was stored for id={}; "
@@ -231,12 +237,13 @@ public class JournalProcessingService {
         }
 
         log.info(
-                "Archived journal email: id={}, sender={}, from={}, subject={}, messageId={}",
+                "Archived journal email: id={}, sender={}, from={}, subject={}, messageId={}, sha256={}",
                 id,
                 details.sender(),
                 details.from(),
                 details.subject(),
-                messageId);
+                messageId,
+                sha256);
     }
 
     private MimeMessage parse(byte[] raw) throws MessagingException {
@@ -245,17 +252,13 @@ public class JournalProcessingService {
     }
 
     /** Returns a deterministic, content-derived suffix for emails without a Message-Id. */
-    private String contentDigestMessageId(byte[] raw) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(raw);
-            return "<" + HexFormat.of().formatHex(digest) + "@journal-archiver.local>";
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 is not available", e);
-        }
+    private String contentDigestMessageId(String sha256) {
+        return "<" + sha256 + "@journal-archiver.local>";
     }
 
     private JournalEmailInfo saveMetadata(
             String id,
+            String sha256,
             EmailDetails details,
             String messageId,
             String envelopeSender,
@@ -272,6 +275,7 @@ public class JournalProcessingService {
         update.set("cc", details.cc());
         update.set("subject", details.subject());
         update.set("messageId", messageId);
+        update.set("sha256", sha256);
         update.set("objectKey", id);
         update.set("envelopeSender", envelopeSender);
         update.set("recipients", recipients);
@@ -293,9 +297,10 @@ public class JournalProcessingService {
             throw new IllegalStateException("MongoDB upsert did not produce document " + id);
         }
         log.info(
-                "Saved journal email metadata to MongoDB: id={}, modificationCount={}",
+                "Saved journal email metadata to MongoDB: id={}, modificationCount={}, sha256={}",
                 id,
-                saved.getModificationCount());
+                saved.getModificationCount(),
+                sha256);
         return saved;
     }
 

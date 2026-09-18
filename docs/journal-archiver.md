@@ -82,10 +82,11 @@ journal 格式识别、“原邮件”提取与采集过滤的规则见
 ## MongoDB 文档字段
 
 除基础信息（`sender`/`from`/`to`/`cc`/`subject`/`messageId`/`envelopeSender` 等）外，
-每次保存都会写入审计字段：
+每次保存都会写入原邮件摘要与审计字段：
 
 | 字段 | 说明 |
 | --- | --- |
+| `sha256` | 原邮件 `.eml` 字节（即 S3 中保存的内容）的 SHA-256 摘要，小写十六进制；内容相同则摘要相同，可用于校验与去重 |
 | `createdAt` | 数据创建时间（时间戳），首次归档时写入，重复归档同一 id 时保持不变 |
 | `updatedAt` | 数据最后修改时间（时间戳），每次保存更新 |
 | `modificationCount` | 数据修改次数，首次归档为 `1`，同一 id 再次归档时 +1（Mongo `$inc` 原子自增，无并发计数丢失） |
@@ -171,7 +172,7 @@ curl -X POST http://localhost:8080/api/journal-emails/resend \
 1. `objectStorageService.store(id, rawEmail)` 写入 S3（key = 同一个 id，
    `Content-Type: message/rfc822`）；
 2. `mongoTemplate.upsert(...)` 写入 MongoDB（`_id` = `Base64(sender 邮箱地址)_Base64(Message-Id)`，
-   并保存 `objectKey` = id）；
+   并保存 `objectKey` = id 与 `sha256` = 原邮件字节摘要）；
 3. 两者都成功后，`RocketMailMetaPublisher` 向 `mail_meta_topic:mail-meta` 同步发送 JSON 消息。
 
 消息的 **key（RocketMQ 消息 id）设为 MongoDB 文档 `_id`**（与 S3 对象 key 相同），
@@ -188,11 +189,13 @@ curl -X POST http://localhost:8080/api/journal-emails/resend \
   "messageId": "<original-123@example.com>",
   "envelopeSender": "postmaster@corp.local",
   "objectKey": "YWxpY2VAZXhhbXBsZS5jb20=_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4=",
+  "sha256": "3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b",
   "receivedAt": "2026-08-16T05:00:00Z"
 }
 ```
 
-其它服务拿到 `id` 后即可用同一个值从 MongoDB 查元数据、从 S3 取原邮件。
+其它服务拿到 `id` 后即可用同一个值从 MongoDB 查元数据、从 S3 取原邮件，并用 `sha256`
+校验取到的原件是否与归档时一致。
 
 > 通知默认带 Mongo outbox：发布失败时文档保持 `PENDING`，后台扫描自动补发；
 > 超过最大重试次数后标记 `FAILED`，仍可用重发接口手工处理。发布动作不会回滚已经完成的

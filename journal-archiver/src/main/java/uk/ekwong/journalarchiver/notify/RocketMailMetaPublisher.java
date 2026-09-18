@@ -71,6 +71,7 @@ public class RocketMailMetaPublisher implements MailMetaPublisher {
                             info.getMessageId(),
                             info.getEnvelopeSender(),
                             info.getObjectKey(),
+                            info.getSha256(),
                             info.getReceivedAt(),
                             info.getCreatedAt(),
                             info.getUpdatedAt(),
