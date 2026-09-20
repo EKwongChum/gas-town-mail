@@ -7,6 +7,57 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Retry-safe and asynchronous delivery for the outbound mail endpoints: an optional
+  `Idempotency-Key` header replays the first result instead of sending twice (409 while the first
+  delivery is still running, and a failed attempt releases the key), and `Prefer: respond-async`
+  answers 202 with a task id polled at GET /api/mails/tasks/{id} (PENDING / SUCCEEDED / FAILED,
+  bounded pool, 429 when the queue is full). Configurable through app.send.idempotency-ttl and
+  app.send.async.*.
+- The MCP sending tools share app.send.rate-limit.requests-per-minute, counted per MCP session.
+- A real TLS end-to-end test (SmtpTlsEndToEndTest) with an embedded implicit-TLS SMTP server and a
+  test-only self-signed certificate: a matching certificate is accepted, a host name mismatch is
+  rejected while app.send.verify-server-identity is on, and the opt-out works.
+
+- Access control for the outbound mail endpoints: an optional shared API key
+  (`app.security.api-key`, sent as `X-API-Key` or `Authorization: Bearer`) on
+  `app.security.protected-paths` (default `/api/mails/**` and `/mcp`), an SMTP host allow list
+  (`app.send.allowed-smtp-hosts`, `*.` wildcard, rejected with `403`) and a per-client rate limit
+  (`app.send.rate-limit.requests-per-minute`, answered with `429` and `Retry-After`).
+- Delivery hardening: TLS server identity verification is enabled by default
+  (`app.send.verify-server-identity`), credentials are refused on unencrypted connections unless
+  `app.send.allow-plaintext-credentials` is switched on, and the envelope sender (SMTP `MAIL FROM`)
+  defaults to the authenticated SMTP account instead of the From header.
+- Outbound mail metrics: `mail.send.attempts` (outcome), `mail.send.duration`,
+  `mail.send.attachments` and `mail.send.attachment.bytes`.
+- Attachments are streamed from their source when the message is written (a multipart upload is
+  read from the servlet container temporary file), and archived attachments are only read when a
+  forward actually carries them over.
+- The OpenAPI documentation of the mail endpoints now describes the JSON and multipart variants in
+  one coherent operation, and the `415` response explains that a multipart `request` part must be
+  `application/json`.
+
+- Outbound mail endpoints on mail-mcp-server: `POST /api/mails/send` sends a mail through an SMTP
+  server supplied in the request (host, port, account, password, subject, body, recipients and
+  Base64 attachments, with a 10 MB per-attachment and 20 MB total limit);
+  `POST /api/mails/reply` and `POST /api/mails/forward` compose the mail from an archived original
+  identified by the archive id returned by the MCP query tools, following the usual mail client
+  semantics (reply-to sender, `Re:`/`Fwd:` subject prefixes, quoted or forwarded original body,
+  `In-Reply-To`/`References` threading for replies, original attachments carried over on forward).
+- `docs/mail-sending.md` documents the three endpoints, the attachment limits, the reply/forward
+  rules, the error responses and the `app.send.*` configuration.
+- The send / reply / forward endpoints also accept `multipart/form-data`, where the JSON body
+  travels in the `request` part and each attachment is uploaded as its own `attachments` file part
+  (no Base64 encoding needed). Uploaded files share the 10 MB / 20 MB limits, file names are
+  sanitized, and the servlet multipart limits default to 12 MB / 30 MB so that an oversized
+  attachment still receives the documented JSON `400` response.
+- MCP tools `send_mail`, `reply_mail` and `forward_mail` expose the same outbound mail
+  capabilities to MCP clients, with the SMTP server and account supplied per call (never stored).
+  They are marked as side-effecting (`readOnlyHint=false`, `openWorldHint=true`), report SMTP and
+  validation failures as tool errors and are covered by the shared
+  `mail.mcp.tool.calls` / `mail.mcp.tool.duration` metrics.
+
 ## [2.0.0] - 2026-09-18
 
 ### Added

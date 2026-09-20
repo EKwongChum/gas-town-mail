@@ -25,6 +25,29 @@ mail-mcp-server `8082`，路径均为 `GET /actuator/health`。
 - mail-cleaner 在 RocketMQ / Elasticsearch 不可用时会分别记录消费启动失败与处理失败日志，消息由
   RocketMQ 重投；健康检查 `GET /actuator/health`（8080/8081/8082）可分别探活三个应用。
 - HTTP 接口未加鉴权，生产环境请置于内网或增加认证/白名单。
+- 发信 / 回复 / 转发接口（mail-mcp-server `8082`）需要能访问请求方指定的 SMTP 服务器
+  （默认 25 / 465 / 587 出站），且请求方提供的账号密码即代表发信身份，按需收紧网络出口。
+  MCP 客户端通过 `send_mail` / `reply_mail` / `forward_mail` 三个工具触发同样的真实投递，
+  调用会计入 `mail.mcp.tool.calls` / `mail.mcp.tool.duration`（`tool` 标签对应工具名）。
+  发信能力的三层保护（`app.security.api-key`、`app.send.allowed-smtp-hosts`、
+  `app.send.rate-limit.*`）与 TLS 相关开关见[邮件发送](mail-sending.md)的「鉴权、白名单与限流」
+  与「传输安全与投递身份」；未配置时启动日志会给出 WARN 提醒。
+
+## 发信指标
+
+mail-mcp-server 的发信链路在 MCP 工具指标之外还提供以下 Micrometer 指标（`/actuator/prometheus`）：
+
+| 指标 | 类型 | 标签 | 说明 |
+| --- | --- | --- | --- |
+| `mail.send.attempts` | counter | `outcome=success\|failure` | 每次投递尝试数（`failure` 含 SMTP 不可达/被拒收） |
+| `mail.send.duration` | timer | `outcome` | 投递耗时（含 SMTP 握手与传输） |
+| `mail.send.attachments` | counter | — | 成功投递邮件携带的附件个数 |
+| `mail.send.attachment.bytes` | counter | — | 成功投递邮件携带的附件字节数 |
+| `mail.mcp.tool.calls` / `mail.mcp.tool.duration` | counter / timer | `tool`、`outcome` | MCP 工具调用（含 `send_mail` / `reply_mail` / `forward_mail`） |
+
+后台投递（`Prefer: respond-async`）使用 `app.send.async.threads` / `queue-capacity` 限定的线程池，
+队列满时请求返回 `429`；任务状态保留 `app.send.async.task-ttl`，可用
+`GET /api/mails/tasks/{id}` 查询。幂等键与任务状态都保存在内存中，多实例部署时只对同一实例有效。
 - 默认端口 `2525` 无需 root；生产环境请按需改为 `25` 并配置 TLS、鉴权和网络白名单。
 - 本机已有 S3 兼容服务时，应用会直接使用其 endpoint；否则请先启动 MinIO。
 

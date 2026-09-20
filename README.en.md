@@ -13,7 +13,7 @@ Gas Town Mail is a journal email archiving and search platform built with **JDK 
 | --- | --- |
 | `journal-archiver` | Embedded SMTP server that receives Exchange journal reports, stores metadata in MongoDB, stores the raw email in S3-compatible object storage, then publishes a notification to RocketMQ |
 | `mail-cleaner` | RocketMQ consumer that reads each email from object storage, extracts searchable metadata, and indexes it into Elasticsearch (`mail_info`) |
-| `mail-mcp-server` | Spring MCP server (Streamable HTTP on `/mcp`) exposing Elasticsearch queries as MCP tools, plus an HTTP endpoint that downloads selected original `.eml` files as a `.zip` archive |
+| `mail-mcp-server` | Spring MCP server (Streamable HTTP on `/mcp`) exposing Elasticsearch queries as MCP tools, plus HTTP endpoints that download selected original `.eml` files as a `.zip` archive and send, reply to or forward mail through a caller-supplied SMTP server |
 | `mail-common` | Shared parsing, storage, and configuration code |
 
 All dependency versions are managed once in the root [pom.xml](pom.xml).

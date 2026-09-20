@@ -71,10 +71,31 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Embedded SMTP server used by the outbound mail end-to-end tests -->
+        <dependency>
+            <groupId>com.github.davidmoten</groupId>
+            <artifactId>subethasmtp</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- SmtpTlsEndToEndTest runs a real TLS handshake against the self-signed
+                         certificate in src/test/resources/tls/test-smtp.p12 (test-only) -->
+                    <systemPropertyVariables>
+                        <javax.net.ssl.trustStore>
+                            ${project.basedir}/src/test/resources/tls/test-smtp.p12
+                        </javax.net.ssl.trustStore>
+                        <javax.net.ssl.trustStorePassword>changeit</javax.net.ssl.trustStorePassword>
+                        <javax.net.ssl.trustStoreType>PKCS12</javax.net.ssl.trustStoreType>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

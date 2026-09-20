@@ -1,6 +1,15 @@
 spring:
   application:
     name: mail-mcp-server
+  servlet:
+    multipart:
+      # Multipart attachment upload (POST /api/mails/*). These servlet limits sit slightly above
+      # app.send.max-attachment-size / max-total-attachment-size so an oversized upload is normally
+      # rejected by the application with the same JSON 400 as the JSON endpoints; only uploads
+      # beyond these limits are answered by the container with a bare 413. Raise both when the
+      # app.send limits are raised.
+      max-file-size: ${MAIL_SEND_MULTIPART_MAX_FILE_SIZE:12MB}
+      max-request-size: ${MAIL_SEND_MULTIPART_MAX_REQUEST_SIZE:30MB}
   elasticsearch:
     uris: http://localhost:9200
     connection-timeout: 5s
@@ -31,6 +40,39 @@ app:
     # (blank = <java.io.tmpdir>/mail-mcp-server/originals) and per-file TTL
     temp-dir: ${MAIL_DOWNLOAD_TEMP_DIR:}
     file-ttl: ${MAIL_DOWNLOAD_FILE_TTL:30m}
+  send:
+    # Outbound mail (POST /api/mails/send|reply|forward): attachment limits and SMTP timeouts
+    max-attachment-size: ${MAIL_SEND_MAX_ATTACHMENT_SIZE:10MB}
+    max-total-attachment-size: ${MAIL_SEND_MAX_TOTAL_ATTACHMENT_SIZE:20MB}
+    connect-timeout: ${MAIL_SEND_CONNECT_TIMEOUT:10s}
+    read-timeout: ${MAIL_SEND_READ_TIMEOUT:30s}
+    write-timeout: ${MAIL_SEND_WRITE_TIMEOUT:60s}
+    # SMTP servers the endpoints may deliver to (empty = any, wildcards like *.example.com allowed)
+    allowed-smtp-hosts: ${MAIL_SEND_ALLOWED_SMTP_HOSTS:}
+    # Certificate host name verification; disable only for self-signed servers
+    verify-server-identity: ${MAIL_SEND_VERIFY_SERVER_IDENTITY:true}
+    # Allow SMTP passwords over an unencrypted connection (not recommended)
+    allow-plaintext-credentials: ${MAIL_SEND_ALLOW_PLAINTEXT_CREDENTIALS:false}
+    rate-limit:
+      # Requests per client per minute on /api/mails/*; 0 disables the limit
+      requests-per-minute: ${MAIL_SEND_RATE_LIMIT_PER_MINUTE:0}
+      # Use the first X-Forwarded-For entry when running behind a reverse proxy
+      trust-forwarded-for: ${MAIL_SEND_TRUST_FORWARDED_FOR:false}
+    # Idempotency-Key of a request is remembered for this long (0 disables the check)
+    idempotency-ttl: ${MAIL_SEND_IDEMPOTENCY_TTL:15m}
+    async:
+      # Allow 'Prefer: respond-async' (202 plus GET /api/mails/tasks/{id})
+      enabled: ${MAIL_SEND_ASYNC_ENABLED:true}
+      threads: ${MAIL_SEND_ASYNC_THREADS:2}
+      queue-capacity: ${MAIL_SEND_ASYNC_QUEUE_CAPACITY:50}
+      task-ttl: ${MAIL_SEND_ASYNC_TASK_TTL:15m}
+  security:
+    # Shared secret required on protected-paths; blank keeps the endpoints open (dev default)
+    api-key: ${APP_SECURITY_API_KEY:}
+    header-name: ${APP_SECURITY_HEADER_NAME:X-API-Key}
+    protected-paths:
+      - /api/mails/**
+      - /mcp
   storage:
     s3:
       endpoint: http://localhost:9000

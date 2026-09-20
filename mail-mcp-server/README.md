@@ -4,7 +4,8 @@
 使用 Spring MCP 系列依赖 `io.modelcontextprotocol.sdk:mcp-spring-webmvc` 提供
 **标准 MCP Streamable HTTP 接口**，供 LLM / MCP 客户端查询 Elasticsearch
 `mail_info` 索引中的归档邮件元数据；同时提供普通 HTTP 接口，将多封邮件原件
-（`.eml`）从对象存储取出后打包为 `.zip` 下载。
+（`.eml`）从对象存储取出后打包为 `.zip` 下载，并支持通过请求方指定的 SMTP 服务器
+发送、回复与转发邮件。
 
 ## 一、服务端点
 
@@ -12,6 +13,10 @@
 | --- | --- | --- |
 | `/mcp` | POST | MCP Streamable HTTP 协议端点（标准 MCP 服务器接口） |
 | `/api/mail-originals/download` | POST | 按归档 id 批量下载邮件原件，返回 `.zip` |
+| `/api/mails/send` | POST | 通过请求中的 SMTP 服务器发送邮件（附件：JSON Base64 或 multipart 文件分片） |
+| `/api/mails/reply` | POST | 回复归档邮件：发送参数 + MCP 查询返回的 `id` |
+| `/api/mails/forward` | POST | 转发归档邮件：发送参数 + MCP 查询返回的 `id` |
+| `/api/mails/tasks/{id}` | GET | 查询 `Prefer: respond-async` 后台投递的状态与结果 |
 | `/v3/api-docs` | GET | OpenAPI JSON 文档 |
 | `/swagger-ui.html` | GET | Swagger UI 可视化文档 |
 | `/actuator/health` | GET | 健康检查（Elasticsearch + 对象存储 bucket） |
@@ -29,6 +34,8 @@
   回传；同一请求内的日志会带上 `traceId` MDC 字段，用于把一次 `tools/call` 的请求、日志和下游错误串起来。
 - 每次 MCP 工具调用会输出一条汇总日志（tool、outcome、durationMs），并记录 Micrometer 指标
   `mail.mcp.tool.calls`（按 `tool` / `outcome` 标签）与 `mail.mcp.tool.duration`（按 `tool` 标签）。
+- HTTP 发信链路另外记录 `mail.send.attempts`（`outcome=success|failure`）、`mail.send.duration`、
+  `mail.send.attachments` 与 `mail.send.attachment.bytes`，便于监控投递成功率与附件流量。
 - 本地默认输出可读文本日志；以 `json` profile 启动（compose 默认已开启）会输出 Logstash 格式的
   JSON 日志，MDC 中的 `traceId` 等字段会作为结构化字段进入每一行。
 
@@ -71,6 +78,43 @@ subject / sender / from / to / messageId（至少命中一个）。
 参数与 `search_mails` 相同（忽略分页参数）。
 
 返回：JSON 对象 `{"count": N}`。
+
+### 4. `send_mail` — 发送邮件
+
+通过工具参数中给出的 SMTP 服务器**真实投递**一封邮件（服务端不保存凭据）。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `smtpHost` / `smtpPort` | string / integer | 是 | SMTP 服务器地址与端口（25 / 465 / 587 等） |
+| `smtpUsername` / `smtpPassword` | string | 否 / 条件 | SMTP 账号与密码；不填用户名表示服务器不做认证，填了用户名则密码必填 |
+| `smtpEncryption` | string | 否 | `none` / `starttls` / `ssl`；缺省时 465 用隐式 TLS，其他端口尝试 STARTTLS |
+| `from` | string | 否 | 发件人（可带显示名），缺省用 `smtpUsername` |
+| `to` / `cc` | array&lt;string&gt; | 是 / 否 | 收件人与抄送；也接受逗号分隔的单个字符串 |
+| `subject` / `content` | string | 否 | 主题与正文（UTF-8） |
+| `html` | boolean | 否 | 正文是否为 HTML，默认 `false` |
+| `attachments` | array&lt;object&gt; | 否 | `{filename, contentType, contentBase64}`，单个 ≤10 MB、合计 ≤20 MB |
+
+返回：JSON 对象，含 `messageId`、`from`、`to`、`cc`、`subject`、`attachmentCount`、
+`attachmentBytes`、`sentAt`；失败时返回 `isError=true` 的错误文本（参数非法、SMTP 不可达/被拒收）。
+
+### 5. `reply_mail` — 回复归档邮件
+
+参数 = `id`（`search_mails` / `get_mail_by_id` 返回的归档 id）+ 上述发送参数，另可选：
+
+| 参数 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `replyAll` | boolean | `false` | 同时抄送原邮件 To/Cc（排除本人） |
+| `includeOriginalBody` | boolean | `true` | 是否引用原邮件正文 |
+| `includeOriginalAttachments` | boolean | `false` | 是否携带原邮件附件 |
+
+未传 `to` 时发给原邮件 `Reply-To`（缺省 `From`），未传 `subject` 时加 `Re:` 前缀，
+并设置 `In-Reply-To` / `References` 保持原会话。
+
+### 6. `forward_mail` — 转发归档邮件
+
+参数 = `id` + 上述发送参数（`to` 必填），另可选 `includeOriginalBody`（默认 `true`）与
+`includeOriginalAttachments`（默认 `true`）。未传 `subject` 时加 `Fwd:` 前缀，正文嵌入转发块，
+原附件默认一并发出且与原附件一起受附件体积限制。
 
 ## 三、MCP 客户端接入
 
@@ -143,6 +187,31 @@ curl -X POST http://localhost:8082/mcp \
   }'
 ```
 
+调用 `send_mail`（真实投递，请谨慎）：
+
+```bash
+curl -X POST http://localhost:8082/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "tools/call",
+    "params": {
+      "name": "send_mail",
+      "arguments": {
+        "smtpHost": "smtp.example.com",
+        "smtpPort": 587,
+        "smtpUsername": "alice@example.com",
+        "smtpPassword": "secret",
+        "to": ["bob@example.com"],
+        "subject": "Hello",
+        "content": "Sent through the MCP tool"
+      }
+    }
+  }'
+```
+
 > 提示：Streamable HTTP 服务端返回 `Mcp-Session-Id` 响应头，后续同会话请求需要带上该头
 > （`-H 'Mcp-Session-Id: <id>'`）。生产环境建议在网关层为该端点配置鉴权。
 
@@ -177,7 +246,79 @@ curl -OJ -X POST http://localhost:8082/api/mail-originals/download \
   -d '{"ids":["id-1","id-2"]}'
 ```
 
-## 五、构建与运行
+## 五、发信 / 回复 / 转发接口
+
+三个接口都用请求体传入 SMTP 服务器地址、端口、账号与密码（服务端不保存凭据），
+`reply` / `forward` 在此基础上增加 MCP 查询返回的归档 id `id`，由服务端读取归档原件
+`.eml` 后按常见邮件客户端的行为组合邮件：
+
+- `POST /api/mails/send`：直接发送，`to` / `cc` / `subject` / `content` / `attachments` 全部由调用方给出；
+- `POST /api/mails/reply`：未传 `to` 时用原邮件 `Reply-To`（缺省 `From`），主题加 `Re:` 前缀，
+  正文引用原邮件并设置 `In-Reply-To`/`References`；`replyAll=true` 抄送原 To/Cc（排除本人）；
+- `POST /api/mails/forward`：`to` 必填，主题加 `Fwd:` 前缀，正文嵌入转发块，默认携带原邮件附件。
+
+```bash
+# 直接发信
+curl -X POST http://localhost:8082/api/mails/send \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "smtpHost": "smtp.example.com", "smtpPort": 587,
+    "smtpUsername": "alice@example.com", "smtpPassword": "secret",
+    "to": ["bob@example.com"], "subject": "Hello",
+    "content": "见附件",
+    "attachments": [{"filename": "a.txt", "contentType": "text/plain", "contentBase64": "aGVsbG8="}]
+  }'
+
+# 回复归档邮件（id 来自 search_mails / get_mail_by_id）
+curl -X POST http://localhost:8082/api/mails/reply \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "id": "<archive-id>",
+    "smtpHost": "smtp.example.com", "smtpPort": 587,
+    "smtpUsername": "alice@example.com", "smtpPassword": "secret",
+    "content": "收到，谢谢！"
+  }'
+```
+
+完整字段说明、附件限制、错误码与更多示例见 [../docs/mail-sending.md](../docs/mail-sending.md)。
+
+### 附件上传的两种形式
+
+同一路径按 `Content-Type` 分流：`application/json`（附件用 `contentBase64`，单个 ≤10 MB、
+合计 ≤20 MB）或 `multipart/form-data`（`request` 分片放同样的 JSON，附件作为可重复的
+`attachments` 文件分片）：
+
+```bash
+curl -X POST http://localhost:8082/api/mails/send \
+  -F 'request={"smtpHost":"smtp.example.com","smtpPort":587,"smtpUsername":"alice@example.com",
+"smtpPassword":"secret","to":["bob@example.com"],"subject":"Hello","content":"见附件"};type=application/json' \
+  -F 'attachments=@report.pdf'
+```
+
+multipart 的额外上限是 `spring.servlet.multipart.max-file-size` / `max-request-size`
+（默认 `12MB` / `30MB`），刻意高于业务上限，以在业务超限时返回统一的 JSON `400`。
+
+发信接口的保护与传输策略（默认值已在 `application.yml` 中给出）：
+
+- 设置 `app.security.api-key` 后，`/api/mails/**` 与 `/mcp` 需要携带 `X-API-Key: <key>`
+  或 `Authorization: Bearer <key>`，否则 `401`；未设置时启动会打印 WARN；
+- `app.send.allowed-smtp-hosts` 为空表示可以使用任意 SMTP 服务器（启动 WARN），配置后不在列表内的
+  目标返回 `403`；
+- `app.send.rate-limit.requests-per-minute` 按客户端限制发信频率，超限 `429` + `Retry-After`；
+- 默认校验 SMTP 证书主机名，并且**不**允许在未加密连接上发送密码（带账号的请求会强制
+  STARTTLS，465 端口用隐式 TLS）；内网自签/明文服务器需要显式关闭相应开关；
+- 信封发件人（`MAIL FROM`）默认使用请求中的 `smtpUsername`，响应里的 `envelopeFrom` 会回传实际值。
+
+上述约束对 MCP 的 `send_mail` / `reply_mail` / `forward_mail` 同样生效（以工具错误文本返回）。
+
+重试与异步投递：
+
+- `Idempotency-Key: <key>`：同一 key 的重复请求返回第一次的结果，不再重复投递（投递中的重复请求
+  返回 `409`，失败会释放 key 以便重试）；
+- `Prefer: respond-async`：立即返回 `202` 与任务 id，用 `GET /api/mails/tasks/{id}` 查询
+  `PENDING` / `SUCCEEDED` / `FAILED` 状态。
+
+## 六、构建与运行
 
 ```bash
 # 在项目根目录构建（会同时构建 mail-common）
@@ -215,14 +356,30 @@ docker build -f mail-mcp-server/Dockerfile -t mail-mcp-server .
 | `app.mcp.endpoint` | `/mcp` | MCP 协议端点路径 |
 | `app.download.temp-dir` | JVM 临时目录下的 `mail-mcp-server/originals` | 暂存 `.eml` 的目录（compose 中可用 `MAIL_DOWNLOAD_TEMP_DIR` 覆盖） |
 | `app.download.file-ttl` | `30m` | 单个临时文件保留时长，到期自动删除（可用 `MAIL_DOWNLOAD_FILE_TTL` 覆盖） |
+| `app.send.max-attachment-size` | `10MB` | 单个附件大小上限（发信 / 回复 / 转发） |
+| `app.send.max-total-attachment-size` | `20MB` | 单封邮件附件合计上限 |
+| `app.send.connect-timeout` / `read-timeout` / `write-timeout` | `10s` / `30s` / `60s` | SMTP 连接、读取与写入超时 |
+| `app.send.allowed-smtp-hosts` | 空（不限） | 允许投递的 SMTP 服务器，支持 `*.example.com`；不在列表内返回 `403` |
+| `app.send.verify-server-identity` | `true` | 校验 SMTP 服务器证书主机名，自签证书服务器才需关闭 |
+| `app.send.allow-plaintext-credentials` | `false` | 是否允许在未加密连接上发送 SMTP 密码（默认拒绝，会强制 STARTTLS/SSL） |
+| `app.send.rate-limit.requests-per-minute` | `0`（不限） | 每个客户端 IP 每分钟允许的 `/api/mails/*` 请求数，超限返回 `429` |
+| `app.send.rate-limit.trust-forwarded-for` | `false` | 反向代理后按 `X-Forwarded-For` 第一个地址区分客户端 |
+| `app.send.idempotency-ttl` | `15m` | `Idempotency-Key` 的去重记忆时长，`0` 关闭 |
+| `app.send.async.enabled` | `true` | 是否允许 `Prefer: respond-async` 后台投递 |
+| `app.send.async.threads` / `queue-capacity` | `2` / `50` | 后台投递线程数与队列长度，队列满返回 `429` |
+| `app.send.async.task-ttl` | `15m` | 后台任务状态保留时长 |
+| `app.security.api-key` | 空（不校验） | 设置后，`app.security.protected-paths`（默认 `/api/mails/**`、`/mcp`）需要 `X-API-Key` 或 `Authorization: Bearer`，否则 `401` |
+| `app.security.header-name` | `X-API-Key` | 读取 key 的请求头名 |
+| `app.security.protected-paths` | `/api/mails/**`、`/mcp` | 需要 API key 的路径（Ant 风格） |
 | `app.storage.s3.*` | 同归档应用 | 读取邮件原件所需的共享 S3 配置（mail-common） |
 
-## 六、依赖说明
+## 七、依赖说明
 
 - `io.modelcontextprotocol.sdk:mcp-spring-webmvc`：Spring MCP WebMVC 传输实现
   （Streamable HTTP / SSE），版本统一在根 POM `dependencyManagement` 管理；
 - `spring-boot-starter-data-elasticsearch`：读取 `mail_info` 索引；
 - `mail-common`：共享的 S3 配置与 `ObjectStorageService`（读取邮件原件）；
+- `org.eclipse.angus:angus-mail`（经 mail-common 传递）：SMTP 发信与 MIME 组装，无需额外依赖；
 - `springdoc-openapi-starter-webmvc-ui`：生成 OpenAPI / Swagger 文档。
 
 > 版本兼容性：Spring MCP SDK 要求 Spring Framework 6.2+，因此本项目父 POM 的
