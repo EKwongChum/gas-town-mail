@@ -7,6 +7,8 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-21
+
 ### Added
 
 - Retry-safe and asynchronous delivery for the outbound mail endpoints: an optional

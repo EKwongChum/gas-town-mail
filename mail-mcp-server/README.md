@@ -325,7 +325,7 @@ multipart 的额外上限是 `spring.servlet.multipart.max-file-size` / `max-req
 mvn clean package
 
 # 启动（默认端口 8082，ES 默认 localhost:9200）
-java -jar mail-mcp-server/target/mail-mcp-server-2.0.0.jar
+java -jar mail-mcp-server/target/mail-mcp-server-2.1.0.jar
 ```
 
 ### Docker（docker compose）

@@ -38,7 +38,7 @@ export JAVA_HOME=/path/to/jdk17
 归档应用（HTTP 8080 / SMTP 2525）：
 
 ```bash
-java -jar journal-archiver/target/journal-archiver-2.0.0.jar
+java -jar journal-archiver/target/journal-archiver-2.1.0.jar
 # 或先安装共享模块到本地仓库，再用 spring-boot:run 调试：
 # ./mvnw install -DskipTests
 # ./mvnw -pl journal-archiver spring-boot:run
@@ -47,13 +47,13 @@ java -jar journal-archiver/target/journal-archiver-2.0.0.jar
 清洗应用（HTTP 8081 / 消费 mail_meta_topic）：
 
 ```bash
-java -jar mail-cleaner/target/mail-cleaner-2.0.0.jar
+java -jar mail-cleaner/target/mail-cleaner-2.1.0.jar
 ```
 
 MCP 查询应用（HTTP 8082 / MCP 端点 `/mcp`）：
 
 ```bash
-java -jar mail-mcp-server/target/mail-mcp-server-2.0.0.jar
+java -jar mail-mcp-server/target/mail-mcp-server-2.1.0.jar
 ```
 
 > MCP 工具的完整参数与调用示例见

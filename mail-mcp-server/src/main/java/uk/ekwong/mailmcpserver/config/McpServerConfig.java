@@ -70,7 +70,7 @@ public class McpServerConfig {
                 new ArrayList<>(mailQueryTools.toolSpecifications());
         tools.addAll(mailSendTools.toolSpecifications());
         return McpServer.sync(transportProvider)
-                .serverInfo("mail-mcp-server", "2.0.0")
+                .serverInfo("mail-mcp-server", "2.1.0")
                 .instructions(
                         "Query the archived journal email metadata in Elasticsearch (mail_info index) with "
                                 + "search_mails, get_mail_by_id and count_mails, and send mail with send_mail, "
