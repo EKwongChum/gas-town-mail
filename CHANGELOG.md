@@ -7,6 +7,18 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Outbound mail endpoints on mail-mcp-server: `POST /api/mails/send` sends a mail through an SMTP
+  server supplied in the request (host, port, account, password, subject, body, recipients and
+  Base64 attachments, with a 10 MB per-attachment and 20 MB total limit);
+  `POST /api/mails/reply` and `POST /api/mails/forward` compose the mail from an archived original
+  identified by the archive id returned by the MCP query tools, following the usual mail client
+  semantics (reply-to sender, `Re:`/`Fwd:` subject prefixes, quoted or forwarded original body,
+  `In-Reply-To`/`References` threading for replies, original attachments carried over on forward).
+- `docs/mail-sending.md` documents the three endpoints, the attachment limits, the reply/forward
+  rules, the error responses and the `app.send.*` configuration.
+
 ## [2.0.0] - 2026-09-18
 
 ### Added

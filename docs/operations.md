@@ -25,6 +25,8 @@ mail-mcp-server `8082`，路径均为 `GET /actuator/health`。
 - mail-cleaner 在 RocketMQ / Elasticsearch 不可用时会分别记录消费启动失败与处理失败日志，消息由
   RocketMQ 重投；健康检查 `GET /actuator/health`（8080/8081/8082）可分别探活三个应用。
 - HTTP 接口未加鉴权，生产环境请置于内网或增加认证/白名单。
+- 发信 / 回复 / 转发接口（mail-mcp-server `8082`）需要能访问请求方指定的 SMTP 服务器
+  （默认 25 / 465 / 587 出站），且请求方提供的账号密码即代表发信身份，按需收紧网络出口。
 - 默认端口 `2525` 无需 root；生产环境请按需改为 `25` 并配置 TLS、鉴权和网络白名单。
 - 本机已有 S3 兼容服务时，应用会直接使用其 endpoint；否则请先启动 MinIO。
 

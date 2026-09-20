@@ -7,7 +7,8 @@
 
 > 中文文档 | [English README](README.en.md)
 
-邮件归档与清洗平台：SMTP 收信 → S3/MinIO + MongoDB → RocketMQ → Elasticsearch → MCP 检索。
+邮件归档与清洗平台：SMTP 收信 → S3/MinIO + MongoDB → RocketMQ → Elasticsearch → MCP 检索；
+另外支持按 MCP 查询结果通过 HTTP 接口发送、回复与转发邮件。
 三个应用基于 Spring Boot 3.4（JDK 17），共享 mail-common 模块。
 
 ```bash
@@ -23,6 +24,7 @@ docker compose up -d && ./mvnw clean package
 | [journal-archiver](docs/journal-archiver.md) | 配置项、MongoDB 字段、可靠性、重发接口 |
 | [mail-cleaner](docs/mail-cleaner.md) | ES 字段、配置、删除与原件下载接口 |
 | [mail-mcp-server](docs/mail-mcp-server.md) | MCP 工具与运行方式 |
+| [邮件发送](docs/mail-sending.md) | 发信 / 回复 / 转发接口、附件限制与错误码 |
 | [运维与可观测性](docs/operations.md) | 健康检查、指标、traceId、注意事项 |
 | [开发与测试](docs/development.md) | 测试分布与贡献方式 |
 

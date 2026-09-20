@@ -5,7 +5,8 @@
 基于 **JDK 17 / Spring Boot 3.4** 的 Spring MCP（Model Context Protocol）服务，
 使用 Spring MCP 系列依赖 `io.modelcontextprotocol.sdk:mcp-spring-webmvc` 提供
 标准 MCP Streamable HTTP 接口（默认 `POST /mcp`，端口 8082），
-让 LLM / MCP 客户端直接查询 Elasticsearch `mail_info` 索引中的归档邮件元数据。
+让 LLM / MCP 客户端直接查询 Elasticsearch `mail_info` 索引中的归档邮件元数据；
+同时提供邮件原件批量下载与发信 / 回复 / 转发 HTTP 接口。
 
 ## 工作流程
 
@@ -29,6 +30,18 @@ MCP 客户端（Claude Desktop / Cursor / 任意 MCP SDK）
 | `search_mails` | 分页搜索：keyword（subject/sender/from/to/messageId）、精确地址、Message-Id、时间范围；返回的每封邮件都带 `sha256` |
 | `get_mail_by_id` | 按归档 id（MongoDB `_id` / S3 key）查询单封邮件，返回字段含 `sha256` |
 | `count_mails` | 统计符合条件的邮件数量 |
+
+## HTTP 接口
+
+| 接口 | 说明 |
+| --- | --- |
+| `POST /api/mail-originals/download` | 按归档 id 批量下载邮件原件，打包为 `.zip` |
+| `POST /api/mails/send` | 用请求中提供的 SMTP 服务器与账号发送邮件（支持附件） |
+| `POST /api/mails/reply` | 回复归档邮件（发送参数 + MCP 查询返回的 `id`） |
+| `POST /api/mails/forward` | 转发归档邮件（发送参数 + MCP 查询返回的 `id`） |
+
+发送类接口的完整字段、附件限制（单个 10 MB / 合计 20 MB）、回复与转发语义、错误码与示例见
+[邮件发送](mail-sending.md)。
 
 ## 接口文档
 

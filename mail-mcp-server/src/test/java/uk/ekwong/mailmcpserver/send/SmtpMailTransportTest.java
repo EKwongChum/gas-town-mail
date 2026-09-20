@@ -1,0 +1,212 @@
+/*
+ * Copyright 2026 ekwongchum
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package uk.ekwong.mailmcpserver.send;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import jakarta.mail.Address;
+import jakarta.mail.BodyPart;
+import jakarta.mail.Multipart;
+import jakarta.mail.Session;
+import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.internet.MimeUtility;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.ServerSocket;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Test;
+import org.subethamail.smtp.MessageContext;
+import org.subethamail.smtp.MessageHandler;
+import org.subethamail.smtp.MessageHandlerFactory;
+import org.subethamail.smtp.server.SMTPServer;
+
+/** End-to-end test: a real SMTP conversation against an embedded server. */
+class SmtpMailTransportTest {
+
+    private static final Duration TIMEOUT = Duration.ofSeconds(10);
+
+    @Test
+    void deliversMailWithBodyAndAttachment() throws Exception {
+        CapturingServer server = new CapturingServer();
+        server.start();
+        try {
+            MailSendService service =
+                    new MailSendService(new SmtpMailTransport(new MailSendProperties()));
+            MailSendCommand command =
+                    new MailSendCommand(
+                            new SmtpSettings("127.0.0.1", server.port(), null, null, null),
+                            "alice@example.com",
+                            List.of("Bob <bob@example.com>"),
+                            List.of("carol@example.com"),
+                            "SMTP end to end",
+                            "Hello Bob, see the attachment.",
+                            false,
+                            List.of(
+                                    new MailAttachment(
+                                            "note.txt",
+                                            "text/plain",
+                                            "attachment-data".getBytes(StandardCharsets.UTF_8))),
+                            null,
+                            List.of());
+
+            MailSendResponse response = service.send(command);
+            byte[] raw = server.received();
+            MimeMessage received =
+                    new MimeMessage(
+                            Session.getInstance(new Properties()), new ByteArrayInputStream(raw));
+
+            assertThat(received.getSubject()).isEqualTo("SMTP end to end");
+            assertThat(received.getFrom()[0].toString()).isEqualTo("alice@example.com");
+            assertThat(received.getAllRecipients())
+                    .extracting(Address::toString)
+                    .containsExactlyInAnyOrder("Bob <bob@example.com>", "carol@example.com");
+            assertThat(received.getHeader("Message-ID")).containsExactly(response.messageId());
+            assertThat(received.getContent()).isInstanceOf(Multipart.class);
+
+            Multipart multipart = (Multipart) received.getContent();
+            assertThat(multipart.getCount()).isEqualTo(2);
+            BodyPart body = multipart.getBodyPart(0);
+            assertThat((String) body.getContent()).isEqualTo("Hello Bob, see the attachment.");
+            BodyPart attachment = multipart.getBodyPart(1);
+            assertThat(MimeUtility.decodeText(attachment.getFileName())).isEqualTo("note.txt");
+            assertThat(
+                            new String(
+                                    attachment.getInputStream().readAllBytes(),
+                                    StandardCharsets.UTF_8))
+                    .isEqualTo("attachment-data");
+
+            assertThat(server.envelopeSender()).isEqualTo("alice@example.com");
+            assertThat(server.envelopeRecipients())
+                    .containsExactlyInAnyOrder("bob@example.com", "carol@example.com");
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    void failsWhenTheSmtpServerIsUnreachable() throws Exception {
+        int port = freePort();
+        MailSendService service =
+                new MailSendService(new SmtpMailTransport(new MailSendProperties()));
+        MailSendCommand command =
+                new MailSendCommand(
+                        new SmtpSettings("127.0.0.1", port, null, null, null),
+                        "alice@example.com",
+                        List.of("bob@example.com"),
+                        List.of(),
+                        "Subject",
+                        "Body",
+                        false,
+                        List.of(),
+                        null,
+                        List.of());
+
+        assertThatThrownBy(() -> service.send(command))
+                .isInstanceOf(MailSendFailedException.class)
+                .hasMessageContaining("SMTP send via 127.0.0.1:" + port + " (auto) failed");
+    }
+
+    private static int freePort() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            return socket.getLocalPort();
+        }
+    }
+
+    /** Embedded SMTP server that captures the envelope and the message data. */
+    private static final class CapturingServer {
+
+        private int port;
+        private final CountDownLatch received = new CountDownLatch(1);
+        private final List<byte[]> messages = new ArrayList<>();
+        private String envelopeSender;
+        private final List<String> envelopeRecipients = new ArrayList<>();
+        private SMTPServer server;
+
+        void start() throws IOException {
+            port = freePort();
+            server =
+                    SMTPServer.port(port)
+                            .hostName("test.local")
+                            .messageHandlerFactory(new HandlerFactory())
+                            .build();
+            server.start();
+        }
+
+        void stop() {
+            if (server != null) {
+                server.stop();
+            }
+        }
+
+        int port() {
+            return port;
+        }
+
+        byte[] received() throws InterruptedException {
+            assertThat(received.await(TIMEOUT.toSeconds(), TimeUnit.SECONDS))
+                    .as("SMTP server received a message")
+                    .isTrue();
+            return messages.get(0);
+        }
+
+        String envelopeSender() {
+            return envelopeSender;
+        }
+
+        List<String> envelopeRecipients() {
+            return envelopeRecipients;
+        }
+
+        private final class HandlerFactory implements MessageHandlerFactory {
+
+            @Override
+            public MessageHandler create(MessageContext context) {
+                return new MessageHandler() {
+                    @Override
+                    public void from(String from) {
+                        envelopeSender = from;
+                    }
+
+                    @Override
+                    public void recipient(String recipient) {
+                        envelopeRecipients.add(recipient);
+                    }
+
+                    @Override
+                    public String data(InputStream data) throws IOException {
+                        messages.add(data.readAllBytes());
+                        received.countDown();
+                        return null;
+                    }
+
+                    @Override
+                    public void done() {
+                        // nothing to clean up
+                    }
+                };
+            }
+        }
+    }
+}

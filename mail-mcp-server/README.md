@@ -4,7 +4,8 @@
 使用 Spring MCP 系列依赖 `io.modelcontextprotocol.sdk:mcp-spring-webmvc` 提供
 **标准 MCP Streamable HTTP 接口**，供 LLM / MCP 客户端查询 Elasticsearch
 `mail_info` 索引中的归档邮件元数据；同时提供普通 HTTP 接口，将多封邮件原件
-（`.eml`）从对象存储取出后打包为 `.zip` 下载。
+（`.eml`）从对象存储取出后打包为 `.zip` 下载，并支持通过请求方指定的 SMTP 服务器
+发送、回复与转发邮件。
 
 ## 一、服务端点
 
@@ -12,6 +13,9 @@
 | --- | --- | --- |
 | `/mcp` | POST | MCP Streamable HTTP 协议端点（标准 MCP 服务器接口） |
 | `/api/mail-originals/download` | POST | 按归档 id 批量下载邮件原件，返回 `.zip` |
+| `/api/mails/send` | POST | 通过请求中的 SMTP 服务器发送邮件（支持附件，单个 ≤10 MB、合计 ≤20 MB） |
+| `/api/mails/reply` | POST | 回复归档邮件：发送参数 + MCP 查询返回的 `id` |
+| `/api/mails/forward` | POST | 转发归档邮件：发送参数 + MCP 查询返回的 `id` |
 | `/v3/api-docs` | GET | OpenAPI JSON 文档 |
 | `/swagger-ui.html` | GET | Swagger UI 可视化文档 |
 | `/actuator/health` | GET | 健康检查（Elasticsearch + 对象存储 bucket） |
@@ -177,7 +181,43 @@ curl -OJ -X POST http://localhost:8082/api/mail-originals/download \
   -d '{"ids":["id-1","id-2"]}'
 ```
 
-## 五、构建与运行
+## 五、发信 / 回复 / 转发接口
+
+三个接口都用请求体传入 SMTP 服务器地址、端口、账号与密码（服务端不保存凭据），
+`reply` / `forward` 在此基础上增加 MCP 查询返回的归档 id `id`，由服务端读取归档原件
+`.eml` 后按常见邮件客户端的行为组合邮件：
+
+- `POST /api/mails/send`：直接发送，`to` / `cc` / `subject` / `content` / `attachments` 全部由调用方给出；
+- `POST /api/mails/reply`：未传 `to` 时用原邮件 `Reply-To`（缺省 `From`），主题加 `Re:` 前缀，
+  正文引用原邮件并设置 `In-Reply-To`/`References`；`replyAll=true` 抄送原 To/Cc（排除本人）；
+- `POST /api/mails/forward`：`to` 必填，主题加 `Fwd:` 前缀，正文嵌入转发块，默认携带原邮件附件。
+
+```bash
+# 直接发信
+curl -X POST http://localhost:8082/api/mails/send \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "smtpHost": "smtp.example.com", "smtpPort": 587,
+    "smtpUsername": "alice@example.com", "smtpPassword": "secret",
+    "to": ["bob@example.com"], "subject": "Hello",
+    "content": "见附件",
+    "attachments": [{"filename": "a.txt", "contentType": "text/plain", "contentBase64": "aGVsbG8="}]
+  }'
+
+# 回复归档邮件（id 来自 search_mails / get_mail_by_id）
+curl -X POST http://localhost:8082/api/mails/reply \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "id": "<archive-id>",
+    "smtpHost": "smtp.example.com", "smtpPort": 587,
+    "smtpUsername": "alice@example.com", "smtpPassword": "secret",
+    "content": "收到，谢谢！"
+  }'
+```
+
+完整字段说明、附件限制、错误码与更多示例见 [../docs/mail-sending.md](../docs/mail-sending.md)。
+
+## 六、构建与运行
 
 ```bash
 # 在项目根目录构建（会同时构建 mail-common）
@@ -215,14 +255,18 @@ docker build -f mail-mcp-server/Dockerfile -t mail-mcp-server .
 | `app.mcp.endpoint` | `/mcp` | MCP 协议端点路径 |
 | `app.download.temp-dir` | JVM 临时目录下的 `mail-mcp-server/originals` | 暂存 `.eml` 的目录（compose 中可用 `MAIL_DOWNLOAD_TEMP_DIR` 覆盖） |
 | `app.download.file-ttl` | `30m` | 单个临时文件保留时长，到期自动删除（可用 `MAIL_DOWNLOAD_FILE_TTL` 覆盖） |
+| `app.send.max-attachment-size` | `10MB` | 单个附件大小上限（发信 / 回复 / 转发） |
+| `app.send.max-total-attachment-size` | `20MB` | 单封邮件附件合计上限 |
+| `app.send.connect-timeout` / `read-timeout` / `write-timeout` | `10s` / `30s` / `60s` | SMTP 连接、读取与写入超时 |
 | `app.storage.s3.*` | 同归档应用 | 读取邮件原件所需的共享 S3 配置（mail-common） |
 
-## 六、依赖说明
+## 七、依赖说明
 
 - `io.modelcontextprotocol.sdk:mcp-spring-webmvc`：Spring MCP WebMVC 传输实现
   （Streamable HTTP / SSE），版本统一在根 POM `dependencyManagement` 管理；
 - `spring-boot-starter-data-elasticsearch`：读取 `mail_info` 索引；
 - `mail-common`：共享的 S3 配置与 `ObjectStorageService`（读取邮件原件）；
+- `org.eclipse.angus:angus-mail`（经 mail-common 传递）：SMTP 发信与 MIME 组装，无需额外依赖；
 - `springdoc-openapi-starter-webmvc-ui`：生成 OpenAPI / Swagger 文档。
 
 > 版本兼容性：Spring MCP SDK 要求 Spring Framework 6.2+，因此本项目父 POM 的

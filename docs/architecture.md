@@ -24,8 +24,11 @@
   1. 基于 Spring MCP 系列依赖（`mcp-spring-webmvc`）提供**标准 MCP Streamable HTTP 接口**（`/mcp`）；
   2. 通过 MCP 工具从 **Elasticsearch** `mail_info` 索引查询归档邮件元数据
      （关键词 / 收发件人 / Message-Id / 时间范围检索、按 id 查询、计数），
-     返回结果中包含原邮件的 `sha256`；
-  3. 提供 HTTP 接口按归档 id 从对象存储批量下载邮件原件，打包为 `.zip` 返回。
+    返回结果中包含原邮件的 `sha256`；
+  3. 提供 HTTP 接口按归档 id 从对象存储批量下载邮件原件，打包为 `.zip` 返回；
+  4. 提供 HTTP 接口**发信 / 回复 / 转发**：SMTP 服务器与账号由请求方传入（服务端不保存凭据），
+     回复与转发按 MCP 查询返回的归档 id 读取原件，复用其收件人、主题、正文引用与附件。
+     详见[邮件发送](mail-sending.md)。
 
 ```text
 gas-town-mail（父 POM：统一依赖版本、编译参数、插件管理）
@@ -38,7 +41,7 @@ gas-town-mail（父 POM：统一依赖版本、编译参数、插件管理）
 ├── journal-archiver     归档应用（SMTP + MongoDB + S3 + RocketMQ 生产者 + 重发接口）
 ├── mail-cleaner         清洗应用（RocketMQ 消费者 + S3 读 + Elasticsearch mail_info）
 └── mail-mcp-server      MCP 查询应用（Spring MCP 标准接口 + Elasticsearch 查询 +
-                         邮件原件批量 zip 下载）
+                         邮件原件批量 zip 下载 + 发信/回复/转发接口）
 ```
 
 三个应用通过共享模块 **mail-common** 复用邮件解析、S3 读写、ES 文档模型、公共配置等相同逻辑；
@@ -55,8 +58,10 @@ flowchart LR
     MQ --> Cleaner["mail-cleaner<br/>(消费 + 清洗)"]
     Cleaner -->|mail_info 索引| ES[(Elasticsearch)]
     S3 -. 原件下载 .-> Mcp["mail-mcp-server<br/>(MCP 查询 + zip 下载)"]
+    S3 -. 回复/转发读原件 .-> Mcp
     ES --> Mcp
     Mcp --> Client["LLM / MCP 客户端"]
+    Mcp -->|SMTP 发信/回复/转发| Outbound["收件方邮件系统"]
 ```
 
 单个应用的内部流程见各自的文档：
