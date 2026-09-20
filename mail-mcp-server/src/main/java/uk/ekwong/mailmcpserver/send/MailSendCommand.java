@@ -25,6 +25,8 @@ import java.util.List;
  *
  * @param inReplyTo value of the {@code In-Reply-To} header, {@code null} for a new mail
  * @param references values of the {@code References} header, empty for a new mail
+ * @param envelopeFrom SMTP {@code MAIL FROM} address, {@code null} to use the {@code From} header
+ * @param messageId value of the {@code Message-ID} header, generated from the sender domain
  */
 public record MailSendCommand(
         SmtpSettings smtp,
@@ -36,7 +38,9 @@ public record MailSendCommand(
         boolean html,
         List<MailAttachment> attachments,
         String inReplyTo,
-        List<String> references) {
+        List<String> references,
+        String envelopeFrom,
+        String messageId) {
 
     public MailSendCommand {
         to = to == null ? List.of() : List.copyOf(to);
@@ -49,27 +53,82 @@ public record MailSendCommand(
 
     public MailSendCommand withRecipients(List<String> newTo, List<String> newCc) {
         return new MailSendCommand(
-                smtp, from, newTo, newCc, subject, body, html, attachments, inReplyTo, references);
+                smtp,
+                from,
+                newTo,
+                newCc,
+                subject,
+                body,
+                html,
+                attachments,
+                inReplyTo,
+                references,
+                envelopeFrom,
+                messageId);
     }
 
     public MailSendCommand withSubject(String newSubject) {
         return new MailSendCommand(
-                smtp, from, to, cc, newSubject, body, html, attachments, inReplyTo, references);
+                smtp,
+                from,
+                to,
+                cc,
+                newSubject,
+                body,
+                html,
+                attachments,
+                inReplyTo,
+                references,
+                envelopeFrom,
+                messageId);
     }
 
     public MailSendCommand withBody(String newBody) {
         return new MailSendCommand(
-                smtp, from, to, cc, subject, newBody, html, attachments, inReplyTo, references);
+                smtp,
+                from,
+                to,
+                cc,
+                subject,
+                newBody,
+                html,
+                attachments,
+                inReplyTo,
+                references,
+                envelopeFrom,
+                messageId);
     }
 
     public MailSendCommand withAttachments(List<MailAttachment> newAttachments) {
         return new MailSendCommand(
-                smtp, from, to, cc, subject, body, html, newAttachments, inReplyTo, references);
+                smtp,
+                from,
+                to,
+                cc,
+                subject,
+                body,
+                html,
+                newAttachments,
+                inReplyTo,
+                references,
+                envelopeFrom,
+                messageId);
     }
 
     public MailSendCommand withThreading(String newInReplyTo, List<String> newReferences) {
         return new MailSendCommand(
-                smtp, from, to, cc, subject, body, html, attachments, newInReplyTo, newReferences);
+                smtp,
+                from,
+                to,
+                cc,
+                subject,
+                body,
+                html,
+                attachments,
+                newInReplyTo,
+                newReferences,
+                envelopeFrom,
+                messageId);
     }
 
     /** Total size of all attachments in bytes. */

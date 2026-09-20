@@ -24,6 +24,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
+import uk.ekwong.mailmcpserver.security.SecurityProperties;
 
 /** Verifies that the {@code app.send.*} keys of application.yml bind to the properties bean. */
 class MailSendPropertiesTest {
@@ -68,7 +69,59 @@ class MailSendPropertiesTest {
                         });
     }
 
+    @Test
+    void bindsTheOutboundMailSafetyDefaults() {
+        contextRunner.run(
+                context -> {
+                    MailSendProperties properties = context.getBean(MailSendProperties.class);
+                    assertThat(properties.getAllowedSmtpHosts()).isEmpty();
+                    assertThat(properties.isVerifyServerIdentity()).isTrue();
+                    assertThat(properties.isAllowPlaintextCredentials()).isFalse();
+                    assertThat(properties.getRateLimit().enabled()).isFalse();
+                    assertThat(properties.getRateLimit().isTrustForwardedFor()).isFalse();
+                });
+    }
+
+    @Test
+    void bindsTheSecurityDefaults() {
+        contextRunner.run(
+                context -> {
+                    SecurityProperties properties = context.getBean(SecurityProperties.class);
+                    assertThat(properties.getApiKey()).isEmpty();
+                    assertThat(properties.getHeaderName()).isEqualTo("X-API-Key");
+                    assertThat(properties.getProtectedPaths())
+                            .containsExactly("/api/mails/**", "/mcp");
+                });
+    }
+
+    @Test
+    void bindsOverriddenSafetyValues() {
+        contextRunner
+                .withPropertyValues(
+                        "app.send.allowed-smtp-hosts=smtp.example.com, *.corp.example",
+                        "app.send.verify-server-identity=false",
+                        "app.send.allow-plaintext-credentials=true",
+                        "app.send.rate-limit.requests-per-minute=5",
+                        "app.send.rate-limit.trust-forwarded-for=true",
+                        "app.security.api-key=secret",
+                        "app.security.protected-paths=/mcp")
+                .run(
+                        context -> {
+                            MailSendProperties send = context.getBean(MailSendProperties.class);
+                            assertThat(send.getAllowedSmtpHosts())
+                                    .containsExactly("smtp.example.com", "*.corp.example");
+                            assertThat(send.isVerifyServerIdentity()).isFalse();
+                            assertThat(send.isAllowPlaintextCredentials()).isTrue();
+                            assertThat(send.getRateLimit().getRequestsPerMinute()).isEqualTo(5);
+                            assertThat(send.getRateLimit().isTrustForwardedFor()).isTrue();
+
+                            SecurityProperties security = context.getBean(SecurityProperties.class);
+                            assertThat(security.getApiKey()).isEqualTo("secret");
+                            assertThat(security.getProtectedPaths()).containsExactly("/mcp");
+                        });
+    }
+
     @Configuration(proxyBeanMethods = false)
-    @EnableConfigurationProperties(MailSendProperties.class)
+    @EnableConfigurationProperties({MailSendProperties.class, SecurityProperties.class})
     static class TestConfiguration {}
 }

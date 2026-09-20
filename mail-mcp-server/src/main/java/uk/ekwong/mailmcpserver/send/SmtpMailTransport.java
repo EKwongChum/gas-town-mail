@@ -26,6 +26,7 @@ import java.util.Properties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 /**
  * Sends mail with the Jakarta Mail SMTP provider (angus-mail, already on the classpath through
@@ -44,13 +45,14 @@ public class SmtpMailTransport implements MailTransport {
     }
 
     @Override
-    public MimeMessage newMessage(SmtpSettings settings) {
-        return new MimeMessage(session(settings));
+    public MimeMessage newMessage(MailSendCommand command) {
+        return new OutgoingMimeMessage(session(command), command.messageId());
     }
 
     @Override
-    public void send(SmtpSettings settings, MimeMessage message) throws MessagingException {
-        Session session = message.getSession() == null ? session(settings) : message.getSession();
+    public void send(MailSendCommand command, MimeMessage message) throws MessagingException {
+        SmtpSettings settings = command.smtp();
+        Session session = message.getSession() == null ? session(command) : message.getSession();
         Transport transport = session.getTransport();
         try {
             if (settings.authenticated()) {
@@ -65,7 +67,8 @@ public class SmtpMailTransport implements MailTransport {
         }
     }
 
-    private Session session(SmtpSettings settings) {
+    Session session(MailSendCommand command) {
+        SmtpSettings settings = command.smtp();
         Properties mailProperties = new Properties();
         mailProperties.put("mail.transport.protocol", "smtp");
         mailProperties.put("mail.smtp.host", settings.host());
@@ -78,6 +81,14 @@ public class SmtpMailTransport implements MailTransport {
                 "mail.smtp.timeout", String.valueOf(properties.getReadTimeout().toMillis()));
         mailProperties.put(
                 "mail.smtp.writetimeout", String.valueOf(properties.getWriteTimeout().toMillis()));
+        mailProperties.put(
+                "mail.smtp.ssl.checkserveridentity",
+                String.valueOf(properties.isVerifyServerIdentity()));
+        if (StringUtils.hasText(command.envelopeFrom())) {
+            // Overrides the envelope sender (SMTP MAIL FROM) while the From header keeps the
+            // display name.
+            mailProperties.put("mail.smtp.from", command.envelopeFrom());
+        }
         switch (settings.encryption()) {
             case NONE -> {
                 // plain connection, no TLS

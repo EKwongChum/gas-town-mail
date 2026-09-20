@@ -25,9 +25,12 @@ import jakarta.mail.internet.MimeMessage;
  */
 public interface MailTransport {
 
-    /** Creates a MIME message bound to a session configured from the given SMTP settings. */
-    MimeMessage newMessage(SmtpSettings settings);
+    /**
+     * Creates a MIME message bound to a session configured for this delivery: SMTP coordinates,
+     * encryption and the envelope sender of the command.
+     */
+    MimeMessage newMessage(MailSendCommand command);
 
     /** Connects to the server and sends the message to all of its recipients. */
-    void send(SmtpSettings settings, MimeMessage message) throws MessagingException;
+    void send(MailSendCommand command, MimeMessage message) throws MessagingException;
 }

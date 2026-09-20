@@ -23,6 +23,9 @@ import java.util.List;
  * Result of a successful send. The SMTP server accepted the mail for the listed recipients; the
  * generated {@code messageId} is the value used for the {@code Message-ID} header, so a reply to
  * this mail can be correlated again.
+ *
+ * @param envelopeFrom address used for SMTP {@code MAIL FROM}: the SMTP account of the request when
+ *     the delivery is authenticated, the From address otherwise
  */
 public record MailSendResponse(
         String messageId,
@@ -32,4 +35,5 @@ public record MailSendResponse(
         String subject,
         int attachmentCount,
         long attachmentBytes,
+        String envelopeFrom,
         Instant sentAt) {}

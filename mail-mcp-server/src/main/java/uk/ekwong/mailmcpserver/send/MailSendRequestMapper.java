@@ -16,11 +16,15 @@
 
 package uk.ekwong.mailmcpserver.send;
 
+import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.util.unit.DataSize;
@@ -36,10 +40,21 @@ public class MailSendRequestMapper {
 
     static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
 
+    private static final Logger log = LoggerFactory.getLogger(MailSendRequestMapper.class);
+
     private final MailSendProperties properties;
 
     public MailSendRequestMapper(MailSendProperties properties) {
         this.properties = properties;
+    }
+
+    @PostConstruct
+    void logConfiguration() {
+        if (properties.getAllowedSmtpHosts().isEmpty()) {
+            log.warn(
+                    "app.send.allowed-smtp-hosts is empty: any SMTP server may be used for delivery; "
+                            + "set it to the servers this instance is allowed to send through");
+        }
     }
 
     /** Validates the send parameters and decodes the attachments of the request. */
@@ -58,9 +73,10 @@ public class MailSendRequestMapper {
         }
         SmtpSettings smtp = smtpSettings(request);
         validateAttachmentLimits(attachments);
+        String from = from(request.from(), smtp);
         return new MailSendCommand(
                 smtp,
-                from(request.from(), smtp),
+                from,
                 MailAddressParser.parseList(request.to(), "to"),
                 MailAddressParser.parseList(request.cc(), "cc"),
                 trimToEmpty(request.subject()),
@@ -68,7 +84,35 @@ public class MailSendRequestMapper {
                 Boolean.TRUE.equals(request.html()),
                 attachments,
                 null,
-                List.of());
+                List.of(),
+                smtp.authenticated() ? smtp.username() : null,
+                generateMessageId(from, smtp));
+    }
+
+    /**
+     * Generates the Message-ID from the sender domain, so the value returned to the caller is the
+     * one the recipient sees even when the SMTP server does not add the header itself.
+     */
+    private String generateMessageId(String from, SmtpSettings smtp) {
+        String domain = domainOf(from);
+        String suffix = domain == null ? sanitizeDomain(smtp.host()) : domain;
+        return "<" + UUID.randomUUID() + "@" + suffix + ">";
+    }
+
+    private String domainOf(String address) {
+        int at = address == null ? -1 : address.lastIndexOf('@');
+        if (at < 0 || at == address.length() - 1) {
+            return null;
+        }
+        return sanitizeDomain(address.substring(at + 1).replace(">", "").trim());
+    }
+
+    private String sanitizeDomain(String value) {
+        String sanitized =
+                value == null
+                        ? ""
+                        : value.replaceAll("[^A-Za-z0-9.-]", "").toLowerCase(Locale.ROOT);
+        return sanitized.isEmpty() ? "mail.local" : sanitized;
     }
 
     /**
@@ -145,6 +189,8 @@ public class MailSendRequestMapper {
         if (!StringUtils.hasText(request.smtpHost())) {
             throw new IllegalArgumentException("smtpHost must not be blank");
         }
+        String host = request.smtpHost().trim();
+        checkHostAllowed(host);
         Integer port = request.smtpPort();
         if (port == null) {
             throw new IllegalArgumentException("smtpPort must not be null");
@@ -159,16 +205,56 @@ public class MailSendRequestMapper {
                     "smtpPassword must not be blank when smtpUsername is set");
         }
         return new SmtpSettings(
-                request.smtpHost().trim(), port, username, password, encryption(request));
+                host, port, username, password, encryption(request, port, username != null));
     }
 
-    private SmtpEncryption encryption(MailSendFields request) {
+    /** Rejects SMTP servers that are not covered by the configured allow list. */
+    private void checkHostAllowed(String host) {
+        List<String> allowedHosts = properties.getAllowedSmtpHosts();
+        if (allowedHosts == null || allowedHosts.isEmpty()) {
+            return;
+        }
+        String candidate = host.toLowerCase(Locale.ROOT);
+        boolean permitted =
+                allowedHosts.stream()
+                        .filter(StringUtils::hasText)
+                        .map(pattern -> pattern.trim().toLowerCase(Locale.ROOT))
+                        .anyMatch(
+                                pattern ->
+                                        pattern.startsWith("*.")
+                                                ? candidate.endsWith(pattern.substring(1))
+                                                        && candidate.length() > pattern.length() - 1
+                                                : candidate.equals(pattern));
+        if (!permitted) {
+            throw new SmtpHostNotAllowedException(host, allowedHosts);
+        }
+    }
+
+    /**
+     * Resolves the connection encryption. Credentials are never sent unprotected unless {@code
+     * app.send.allow-plaintext-credentials} is switched on, so an authenticated connection defaults
+     * to STARTTLS (implicit TLS on port 465) and an explicit {@code none} is rejected.
+     */
+    private SmtpEncryption encryption(MailSendFields request, int port, boolean authenticated) {
         String value = trimToNull(request.smtpEncryption());
         if (value == null) {
-            return SmtpEncryption.AUTO;
+            if (port == 465) {
+                return SmtpEncryption.SSL;
+            }
+            return authenticated && !properties.isAllowPlaintextCredentials()
+                    ? SmtpEncryption.STARTTLS
+                    : SmtpEncryption.AUTO;
         }
         return switch (value.toLowerCase(Locale.ROOT)) {
-            case "none" -> SmtpEncryption.NONE;
+            case "none" -> {
+                if (authenticated && !properties.isAllowPlaintextCredentials()) {
+                    throw new IllegalArgumentException(
+                            "SMTP credentials must not be sent over an unencrypted connection; use "
+                                    + "smtpEncryption=starttls or ssl, or set "
+                                    + "app.send.allow-plaintext-credentials=true");
+                }
+                yield SmtpEncryption.NONE;
+            }
             case "starttls" -> SmtpEncryption.STARTTLS;
             case "ssl" -> SmtpEncryption.SSL;
             default ->

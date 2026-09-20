@@ -36,12 +36,12 @@ public final class CapturingMailTransport implements MailTransport {
     private MessagingException failWith;
 
     @Override
-    public MimeMessage newMessage(SmtpSettings settings) {
-        return new MimeMessage(Session.getInstance(new Properties()));
+    public MimeMessage newMessage(MailSendCommand command) {
+        return new OutgoingMimeMessage(Session.getInstance(new Properties()), command.messageId());
     }
 
     @Override
-    public void send(SmtpSettings settings, MimeMessage message) throws MessagingException {
+    public void send(MailSendCommand command, MimeMessage message) throws MessagingException {
         if (failWith != null) {
             throw failWith;
         }

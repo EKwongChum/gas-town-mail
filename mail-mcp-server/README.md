@@ -295,6 +295,19 @@ curl -X POST http://localhost:8082/api/mails/send \
 multipart 的额外上限是 `spring.servlet.multipart.max-file-size` / `max-request-size`
 （默认 `12MB` / `30MB`），刻意高于业务上限，以在业务超限时返回统一的 JSON `400`。
 
+发信接口的保护与传输策略（默认值已在 `application.yml` 中给出）：
+
+- 设置 `app.security.api-key` 后，`/api/mails/**` 与 `/mcp` 需要携带 `X-API-Key: <key>`
+  或 `Authorization: Bearer <key>`，否则 `401`；未设置时启动会打印 WARN；
+- `app.send.allowed-smtp-hosts` 为空表示可以使用任意 SMTP 服务器（启动 WARN），配置后不在列表内的
+  目标返回 `403`；
+- `app.send.rate-limit.requests-per-minute` 按客户端限制发信频率，超限 `429` + `Retry-After`；
+- 默认校验 SMTP 证书主机名，并且**不**允许在未加密连接上发送密码（带账号的请求会强制
+  STARTTLS，465 端口用隐式 TLS）；内网自签/明文服务器需要显式关闭相应开关；
+- 信封发件人（`MAIL FROM`）默认使用请求中的 `smtpUsername`，响应里的 `envelopeFrom` 会回传实际值。
+
+上述约束对 MCP 的 `send_mail` / `reply_mail` / `forward_mail` 同样生效（以工具错误文本返回）。
+
 ## 六、构建与运行
 
 ```bash
@@ -336,6 +349,14 @@ docker build -f mail-mcp-server/Dockerfile -t mail-mcp-server .
 | `app.send.max-attachment-size` | `10MB` | 单个附件大小上限（发信 / 回复 / 转发） |
 | `app.send.max-total-attachment-size` | `20MB` | 单封邮件附件合计上限 |
 | `app.send.connect-timeout` / `read-timeout` / `write-timeout` | `10s` / `30s` / `60s` | SMTP 连接、读取与写入超时 |
+| `app.send.allowed-smtp-hosts` | 空（不限） | 允许投递的 SMTP 服务器，支持 `*.example.com`；不在列表内返回 `403` |
+| `app.send.verify-server-identity` | `true` | 校验 SMTP 服务器证书主机名，自签证书服务器才需关闭 |
+| `app.send.allow-plaintext-credentials` | `false` | 是否允许在未加密连接上发送 SMTP 密码（默认拒绝，会强制 STARTTLS/SSL） |
+| `app.send.rate-limit.requests-per-minute` | `0`（不限） | 每个客户端 IP 每分钟允许的 `/api/mails/*` 请求数，超限返回 `429` |
+| `app.send.rate-limit.trust-forwarded-for` | `false` | 反向代理后按 `X-Forwarded-For` 第一个地址区分客户端 |
+| `app.security.api-key` | 空（不校验） | 设置后，`app.security.protected-paths`（默认 `/api/mails/**`、`/mcp`）需要 `X-API-Key` 或 `Authorization: Bearer`，否则 `401` |
+| `app.security.header-name` | `X-API-Key` | 读取 key 的请求头名 |
+| `app.security.protected-paths` | `/api/mails/**`、`/mcp` | 需要 API key 的路径（Ant 风格） |
 | `app.storage.s3.*` | 同归档应用 | 读取邮件原件所需的共享 S3 配置（mail-common） |
 
 ## 七、依赖说明

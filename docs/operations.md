@@ -29,6 +29,9 @@ mail-mcp-server `8082`，路径均为 `GET /actuator/health`。
   （默认 25 / 465 / 587 出站），且请求方提供的账号密码即代表发信身份，按需收紧网络出口。
   MCP 客户端通过 `send_mail` / `reply_mail` / `forward_mail` 三个工具触发同样的真实投递，
   调用会计入 `mail.mcp.tool.calls` / `mail.mcp.tool.duration`（`tool` 标签对应工具名）。
+  发信能力的三层保护（`app.security.api-key`、`app.send.allowed-smtp-hosts`、
+  `app.send.rate-limit.*`）与 TLS 相关开关见[邮件发送](mail-sending.md)的「鉴权、白名单与限流」
+  与「传输安全与投递身份」；未配置时启动日志会给出 WARN 提醒。
 - 默认端口 `2525` 无需 root；生产环境请按需改为 `25` 并配置 TLS、鉴权和网络白名单。
 - 本机已有 S3 兼容服务时，应用会直接使用其 endpoint；否则请先启动 MinIO。
 

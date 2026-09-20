@@ -8,6 +8,9 @@
 让 LLM / MCP 客户端直接查询 Elasticsearch `mail_info` 索引中的归档邮件元数据；
 同时提供邮件原件批量下载与发信 / 回复 / 转发 HTTP 接口。
 
+> 设置 `app.security.api-key` 后，`/mcp` 与 `/api/mails/**` 需要携带 `X-API-Key` 或
+> `Authorization: Bearer`，详见[邮件发送](mail-sending.md)的鉴权章节。
+
 ## 工作流程
 
 ```text

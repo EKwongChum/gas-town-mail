@@ -28,6 +28,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import uk.ekwong.mailmcpserver.download.OriginalMailNotFoundException;
 import uk.ekwong.mailmcpserver.send.MailSendFailedException;
+import uk.ekwong.mailmcpserver.send.SmtpHostNotAllowedException;
 
 /**
  * Error handling for the outbound mail endpoints: {@code 400} for invalid requests (missing SMTP
@@ -45,6 +46,12 @@ public class MailSendExceptionHandler {
     public ResponseEntity<ApiError> handleBadRequest(IllegalArgumentException e) {
         log.warn("Invalid mail send request: {}", e.getMessage());
         return ResponseEntity.badRequest().body(new ApiError(e.getMessage()));
+    }
+
+    @ExceptionHandler(SmtpHostNotAllowedException.class)
+    public ResponseEntity<ApiError> handleHostNotAllowed(SmtpHostNotAllowedException e) {
+        log.warn("Rejected an SMTP host: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiError(e.getMessage()));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

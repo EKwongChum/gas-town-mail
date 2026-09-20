@@ -147,7 +147,9 @@ class MailSendServiceTest {
                         false,
                         List.of(),
                         null,
-                        List.of());
+                        List.of(),
+                        "alice@example.com",
+                        "<generated@example.com>");
 
         assertThatThrownBy(() -> service.send(withoutRecipients))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -187,6 +189,8 @@ class MailSendServiceTest {
                 html,
                 attachments,
                 inReplyTo,
-                references);
+                references,
+                smtp.authenticated() ? smtp.username() : null,
+                "<generated@example.com>");
     }
 }

@@ -31,8 +31,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
-import java.util.Locale;
-import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -66,10 +64,9 @@ public class MailSendService {
         if (command.to().isEmpty()) {
             throw new IllegalArgumentException("to must not be empty");
         }
-        String messageId = generateMessageId(command);
-        MimeMessage message = build(command, messageId);
+        MimeMessage message = build(command);
         try {
-            transport.send(command.smtp(), message);
+            transport.send(command, message);
         } catch (MessagingException e) {
             throw new MailSendFailedException(
                     "SMTP send via " + command.smtp() + " failed: " + e.getMessage(), e);
@@ -82,18 +79,19 @@ public class MailSendService {
                 command.attachments().size(),
                 command.attachmentBytes());
         return new MailSendResponse(
-                messageId,
+                command.messageId(),
                 command.from(),
                 command.to(),
                 command.cc(),
                 command.subject(),
                 command.attachments().size(),
                 command.attachmentBytes(),
+                command.envelopeFrom(),
                 Instant.now());
     }
 
-    private MimeMessage build(MailSendCommand command, String messageId) {
-        MimeMessage message = transport.newMessage(command.smtp());
+    private MimeMessage build(MailSendCommand command) {
+        MimeMessage message = transport.newMessage(command);
         try {
             message.setFrom(new InternetAddress(command.from(), true));
             message.setRecipients(Message.RecipientType.TO, toAddresses(command.to()));
@@ -109,10 +107,9 @@ public class MailSendService {
             }
             message.setSentDate(new Date());
             setContent(message, command);
-            // Save once before fixing the Message-ID: the mail client generates (and would
-            // otherwise overwrite) the header on the first save, and later saves are no-ops.
+            // The transport creates an OutgoingMimeMessage, which keeps the Message-ID of the
+            // command instead of generating its own.
             message.saveChanges();
-            message.setHeader("Message-ID", messageId);
         } catch (MessagingException e) {
             throw new MailSendFailedException(
                     "Could not build the MIME message: " + e.getMessage(), e);
@@ -159,34 +156,5 @@ public class MailSendService {
             result[i] = new InternetAddress(addresses.get(i), true);
         }
         return result;
-    }
-
-    /**
-     * Generates the Message-ID from a random token and the sender domain, so replies can reference
-     * this mail even when the SMTP server does not add the header itself.
-     */
-    private String generateMessageId(MailSendCommand command) {
-        String domain = domainOf(command.from());
-        if (!StringUtils.hasText(domain)) {
-            domain = sanitizeDomain(command.smtp().host());
-        }
-        return "<" + UUID.randomUUID() + "@" + domain + ">";
-    }
-
-    private String domainOf(String address) {
-        int at = address == null ? -1 : address.lastIndexOf('@');
-        if (at < 0 || at == address.length() - 1) {
-            return null;
-        }
-        String domain = address.substring(at + 1).replace(">", "").trim();
-        return sanitizeDomain(domain);
-    }
-
-    private String sanitizeDomain(String value) {
-        String sanitized =
-                value == null
-                        ? ""
-                        : value.replaceAll("[^A-Za-z0-9.-]", "").toLowerCase(Locale.ROOT);
-        return sanitized.isEmpty() ? "mail.local" : sanitized;
     }
 }

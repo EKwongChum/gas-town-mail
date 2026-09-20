@@ -17,6 +17,7 @@
 package uk.ekwong.mailmcpserver.send;
 
 import java.time.Duration;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.unit.DataSize;
 
@@ -40,6 +41,26 @@ public class MailSendProperties {
     private Duration connectTimeout = Duration.ofSeconds(10);
     private Duration readTimeout = Duration.ofSeconds(30);
     private Duration writeTimeout = Duration.ofSeconds(60);
+
+    /**
+     * SMTP servers the endpoints are allowed to deliver to. Empty (the default) allows any server;
+     * entries may use the {@code *.example.com} wildcard form.
+     */
+    private List<String> allowedSmtpHosts = List.of();
+
+    /**
+     * Whether the SMTP server certificate must match the host name it was reached under. Disable
+     * only for servers with a self-signed certificate.
+     */
+    private boolean verifyServerIdentity = true;
+
+    /**
+     * Whether an SMTP password may be sent over an unencrypted connection. Disabled by default:
+     * credentials force STARTTLS (or implicit TLS) unless this is switched on.
+     */
+    private boolean allowPlaintextCredentials;
+
+    private RateLimit rateLimit = new RateLimit();
 
     public DataSize getMaxAttachmentSize() {
         return maxAttachmentSize;
@@ -79,5 +100,67 @@ public class MailSendProperties {
 
     public void setWriteTimeout(Duration writeTimeout) {
         this.writeTimeout = writeTimeout;
+    }
+
+    public List<String> getAllowedSmtpHosts() {
+        return allowedSmtpHosts;
+    }
+
+    public void setAllowedSmtpHosts(List<String> allowedSmtpHosts) {
+        this.allowedSmtpHosts = allowedSmtpHosts;
+    }
+
+    public boolean isVerifyServerIdentity() {
+        return verifyServerIdentity;
+    }
+
+    public void setVerifyServerIdentity(boolean verifyServerIdentity) {
+        this.verifyServerIdentity = verifyServerIdentity;
+    }
+
+    public boolean isAllowPlaintextCredentials() {
+        return allowPlaintextCredentials;
+    }
+
+    public void setAllowPlaintextCredentials(boolean allowPlaintextCredentials) {
+        this.allowPlaintextCredentials = allowPlaintextCredentials;
+    }
+
+    public RateLimit getRateLimit() {
+        return rateLimit;
+    }
+
+    public void setRateLimit(RateLimit rateLimit) {
+        this.rateLimit = rateLimit;
+    }
+
+    /** Per-client limit of the outbound mail endpoints; disabled when requests per minute is 0. */
+    public static class RateLimit {
+
+        private int requestsPerMinute;
+        private boolean trustForwardedFor;
+
+        public int getRequestsPerMinute() {
+            return requestsPerMinute;
+        }
+
+        public void setRequestsPerMinute(int requestsPerMinute) {
+            this.requestsPerMinute = requestsPerMinute;
+        }
+
+        public boolean enabled() {
+            return requestsPerMinute > 0;
+        }
+
+        /**
+         * Whether the first {@code X-Forwarded-For} entry is used instead of the socket address.
+         */
+        public boolean isTrustForwardedFor() {
+            return trustForwardedFor;
+        }
+
+        public void setTrustForwardedFor(boolean trustForwardedFor) {
+            this.trustForwardedFor = trustForwardedFor;
+        }
     }
 }

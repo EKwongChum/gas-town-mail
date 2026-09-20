@@ -53,8 +53,11 @@ class MailSendRequestMapperTest {
         assertThat(command.smtp().host()).isEqualTo("smtp.example.com");
         assertThat(command.smtp().port()).isEqualTo(587);
         assertThat(command.smtp().authenticated()).isTrue();
-        assertThat(command.smtp().encryption()).isEqualTo(SmtpEncryption.AUTO);
+        // credentials force an encrypted connection unless plaintext is explicitly allowed
+        assertThat(command.smtp().encryption()).isEqualTo(SmtpEncryption.STARTTLS);
         assertThat(command.from()).isEqualTo("alice@example.com");
+        assertThat(command.envelopeFrom()).isEqualTo("alice@example.com");
+        assertThat(command.messageId()).startsWith("<").endsWith("@example.com>");
         assertThat(command.to()).containsExactly("Bob <bob@example.com>");
         assertThat(command.cc()).containsExactly("carol@example.com");
         assertThat(command.subject()).isEqualTo("Hello");
@@ -92,10 +95,10 @@ class MailSendRequestMapperTest {
     void parsesEncryptionCaseInsensitively() {
         assertThat(mapper.toCommand(requestWithEncryption("STARTTLS")).smtp().encryption())
                 .isEqualTo(SmtpEncryption.STARTTLS);
-        assertThat(mapper.toCommand(requestWithEncryption("none")).smtp().encryption())
-                .isEqualTo(SmtpEncryption.NONE);
         assertThat(mapper.toCommand(requestWithEncryption(" ")).smtp().encryption())
-                .isEqualTo(SmtpEncryption.AUTO);
+                .isEqualTo(SmtpEncryption.STARTTLS);
+        assertThat(mapper.toCommand(requestWithEncryption("ssl")).smtp().encryption())
+                .isEqualTo(SmtpEncryption.SSL);
     }
 
     @Test
@@ -303,6 +306,50 @@ class MailSendRequestMapperTest {
     }
 
     @Test
+    void rejectsSmtpHostsOutsideTheAllowList() {
+        properties.setAllowedSmtpHosts(List.of("smtp.example.com", "*.corp.example"));
+
+        assertThat(mapper.toCommand(sendRequest()).smtp().host()).isEqualTo("smtp.example.com");
+        assertThat(mapper.toCommand(withHost("mail.corp.example")).smtp().host())
+                .isEqualTo("mail.corp.example");
+
+        assertThatThrownBy(() -> mapper.toCommand(withHost("evil.example.com")))
+                .isInstanceOf(SmtpHostNotAllowedException.class)
+                .hasMessageContaining("evil.example.com")
+                .hasMessageContaining("permitted hosts");
+        // the wildcard only covers sub-domains
+        assertThatThrownBy(() -> mapper.toCommand(withHost("corp.example")))
+                .isInstanceOf(SmtpHostNotAllowedException.class);
+    }
+
+    @Test
+    void requiresEncryptionWhenCredentialsAreSent() {
+        assertThat(mapper.toCommand(sendRequest()).smtp().encryption())
+                .isEqualTo(SmtpEncryption.STARTTLS);
+        assertThat(mapper.toCommand(withPort(465)).smtp().encryption())
+                .isEqualTo(SmtpEncryption.SSL);
+
+        assertThatThrownBy(() -> mapper.toCommand(requestWithEncryption("none")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("allow-plaintext-credentials");
+
+        properties.setAllowPlaintextCredentials(true);
+        assertThat(mapper.toCommand(requestWithEncryption("none")).smtp().encryption())
+                .isEqualTo(SmtpEncryption.NONE);
+    }
+
+    @Test
+    void keepsUnencryptedServersUsableWithoutCredentials() {
+        MailSendCommand command = mapper.toCommand(anonymousRequest());
+
+        assertThat(command.smtp().authenticated()).isFalse();
+        assertThat(command.smtp().encryption()).isEqualTo(SmtpEncryption.AUTO);
+        assertThat(command.envelopeFrom()).isNull();
+        assertThat(command.from()).isEqualTo("Alice <alice@example.com>");
+        assertThat(command.messageId()).startsWith("<").endsWith("@example.com>");
+    }
+
+    @Test
     void readsAttachmentsFromMultipartFiles() {
         MockMultipartFile report =
                 new MockMultipartFile(
@@ -412,6 +459,22 @@ class MailSendRequestMapperTest {
                 "secret",
                 encryption,
                 null,
+                List.of("bob@example.com"),
+                List.of(),
+                "Subject",
+                "Body",
+                null,
+                List.of());
+    }
+
+    private MailSendRequest anonymousRequest() {
+        return new MailSendRequest(
+                "smtp.example.com",
+                25,
+                null,
+                null,
+                null,
+                "Alice <alice@example.com>",
                 List.of("bob@example.com"),
                 List.of(),
                 "Subject",

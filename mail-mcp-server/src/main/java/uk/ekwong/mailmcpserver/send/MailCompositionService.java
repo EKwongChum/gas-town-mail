@@ -81,7 +81,8 @@ public class MailCompositionService {
      * attachments arrived as multipart file parts.
      */
     public MailSendCommand composeReply(MailReplyRequest request, MailSendCommand base) {
-        OriginalEmailContent original = readOriginal(request.id());
+        byte[] raw = readArchivedEmail(request.id());
+        OriginalEmailContent original = contentParser.parse(raw);
 
         List<String> to = base.to().isEmpty() ? replyRecipients(original) : base.to();
         List<String> cc =
@@ -94,7 +95,9 @@ public class MailCompositionService {
                         ? base.body()
                         : replyBody(base, original);
         List<MailAttachment> attachments =
-                mergeAttachments(base, original, request.includeOriginalAttachments(), false);
+                mergeAttachments(
+                        base,
+                        originalAttachments(raw, request.includeOriginalAttachments(), false));
 
         log.info(
                 "Composed reply to archived mail id={} to={} cc={} attachments={}",
@@ -122,7 +125,8 @@ public class MailCompositionService {
         if (base.to().isEmpty()) {
             throw new IllegalArgumentException("to must not be empty when forwarding");
         }
-        OriginalEmailContent original = readOriginal(request.id());
+        byte[] raw = readArchivedEmail(request.id());
+        OriginalEmailContent original = contentParser.parse(raw);
 
         String subject = defaultSubject(base.subject(), original.subject(), FORWARD_PREFIX, "Fwd:");
         String body =
@@ -130,7 +134,8 @@ public class MailCompositionService {
                         ? base.body()
                         : forwardBody(base, original);
         List<MailAttachment> attachments =
-                mergeAttachments(base, original, request.includeOriginalAttachments(), true);
+                mergeAttachments(
+                        base, originalAttachments(raw, request.includeOriginalAttachments(), true));
 
         log.info(
                 "Composed forward of archived mail id={} to={} cc={} attachments={}",
@@ -145,16 +150,24 @@ public class MailCompositionService {
      * Reads the archived original email from object storage. The id is the one returned by the MCP
      * tools, i.e. the MongoDB {@code _id} and object storage key of the archived mail.
      */
-    private OriginalEmailContent readOriginal(String id) {
+    private byte[] readArchivedEmail(String id) {
         if (!StringUtils.hasText(id)) {
             throw new IllegalArgumentException("id must not be blank");
         }
         String archiveId = id.trim();
-        byte[] raw =
-                objectStorageService
-                        .readIfPresent(archiveId)
-                        .orElseThrow(() -> new OriginalMailNotFoundException(List.of(archiveId)));
-        return contentParser.parse(raw);
+        return objectStorageService
+                .readIfPresent(archiveId)
+                .orElseThrow(() -> new OriginalMailNotFoundException(List.of(archiveId)));
+    }
+
+    /**
+     * Reads the attachments of the archived mail only when they are actually carried over, so a
+     * reply that does not include them never loads their bytes.
+     */
+    private List<MailAttachment> originalAttachments(
+            byte[] raw, Boolean includeOriginal, boolean defaultInclude) {
+        boolean include = includeOriginal == null ? defaultInclude : includeOriginal;
+        return include ? contentParser.readAttachments(raw) : List.of();
     }
 
     private List<String> replyRecipients(OriginalEmailContent original) {
@@ -197,16 +210,12 @@ public class MailCompositionService {
     }
 
     private List<MailAttachment> mergeAttachments(
-            MailSendCommand base,
-            OriginalEmailContent original,
-            Boolean includeOriginal,
-            boolean defaultInclude) {
-        boolean include = includeOriginal == null ? defaultInclude : includeOriginal;
-        if (!include || original.attachments().isEmpty()) {
+            MailSendCommand base, List<MailAttachment> originalAttachments) {
+        if (originalAttachments.isEmpty()) {
             return base.attachments();
         }
         List<MailAttachment> merged = new ArrayList<>(base.attachments());
-        merged.addAll(original.attachments());
+        merged.addAll(originalAttachments);
         try {
             requestMapper.validateAttachmentLimits(merged);
         } catch (IllegalArgumentException e) {

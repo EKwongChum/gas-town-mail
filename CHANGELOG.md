@@ -9,6 +9,16 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Access control for the outbound mail endpoints: an optional shared API key
+  (`app.security.api-key`, sent as `X-API-Key` or `Authorization: Bearer`) on
+  `app.security.protected-paths` (default `/api/mails/**` and `/mcp`), an SMTP host allow list
+  (`app.send.allowed-smtp-hosts`, `*.` wildcard, rejected with `403`) and a per-client rate limit
+  (`app.send.rate-limit.requests-per-minute`, answered with `429` and `Retry-After`).
+- Delivery hardening: TLS server identity verification is enabled by default
+  (`app.send.verify-server-identity`), credentials are refused on unencrypted connections unless
+  `app.send.allow-plaintext-credentials` is switched on, and the envelope sender (SMTP `MAIL FROM`)
+  defaults to the authenticated SMTP account instead of the From header.
+
 - Outbound mail endpoints on mail-mcp-server: `POST /api/mails/send` sends a mail through an SMTP
   server supplied in the request (host, port, account, password, subject, body, recipients and
   Base64 attachments, with a 10 MB per-attachment and 20 MB total limit);

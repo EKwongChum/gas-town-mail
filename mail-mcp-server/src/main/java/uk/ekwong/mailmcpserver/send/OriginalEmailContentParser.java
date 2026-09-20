@@ -56,22 +56,14 @@ public class OriginalEmailContentParser {
     private static final Pattern HTML_WHITESPACE = Pattern.compile("[ \t]+\n");
 
     /**
-     * Parses the raw original email.
+     * Parses the raw original email: headers and body, plus the attachment names. The attachment
+     * bytes are only read by {@link #readAttachments(byte[])}, so a reply that does not carry the
+     * original attachments never loads them.
      *
      * @throws IllegalArgumentException when the bytes are not a readable MIME message
      */
     public OriginalEmailContent parse(byte[] raw) {
-        MimeMessage message;
-        try {
-            message =
-                    new MimeMessage(
-                            Session.getInstance(new Properties()),
-                            new ByteArrayInputStream(raw == null ? new byte[0] : raw));
-        } catch (MessagingException e) {
-            throw new IllegalArgumentException(
-                    "archived original email is not a readable MIME message: " + e.getMessage());
-        }
-
+        MimeMessage message = read(raw);
         BodyCollector collector = new BodyCollector();
         try {
             collect(message, collector);
@@ -90,7 +82,37 @@ public class OriginalEmailContentParser {
                 headerValues(message, "References"),
                 sentDate(message),
                 collector.body(),
-                collector.attachments());
+                collector.attachmentNames());
+    }
+
+    /**
+     * Reads the attachment bytes of the archived original email, e.g. to carry them over on a
+     * forward.
+     *
+     * @throws IllegalArgumentException when the bytes are not a readable MIME message
+     */
+    public List<MailAttachment> readAttachments(byte[] raw) {
+        MimeMessage message = read(raw);
+        AttachmentCollector collector = new AttachmentCollector();
+        try {
+            collectAttachments(message, collector);
+        } catch (MessagingException | IOException e) {
+            throw new IllegalArgumentException(
+                    "could not read the attachments of the archived original email: "
+                            + e.getMessage());
+        }
+        return collector.attachments();
+    }
+
+    private MimeMessage read(byte[] raw) {
+        try {
+            return new MimeMessage(
+                    Session.getInstance(new Properties()),
+                    new ByteArrayInputStream(raw == null ? new byte[0] : raw));
+        } catch (MessagingException e) {
+            throw new IllegalArgumentException(
+                    "archived original email is not a readable MIME message: " + e.getMessage());
+        }
     }
 
     private void collect(Part part, BodyCollector collector)
@@ -104,7 +126,7 @@ public class OriginalEmailContentParser {
         }
         String filename = filename(part);
         if (filename != null) {
-            collector.attachment(filename, part);
+            collector.attachment(filename);
             return;
         }
         if (part.isMimeType("message/rfc822")) {
@@ -116,6 +138,21 @@ public class OriginalEmailContentParser {
             collector.plain(text(part));
         } else if (part.isMimeType("text/html")) {
             collector.html(text(part));
+        }
+    }
+
+    private void collectAttachments(Part part, AttachmentCollector collector)
+            throws MessagingException, IOException {
+        if (part.isMimeType("multipart/*")) {
+            Multipart multipart = (Multipart) part.getContent();
+            for (int i = 0; i < multipart.getCount(); i++) {
+                collectAttachments(multipart.getBodyPart(i), collector);
+            }
+            return;
+        }
+        String filename = filename(part);
+        if (filename != null) {
+            collector.attachment(filename, part);
         }
     }
 
@@ -227,12 +264,15 @@ public class OriginalEmailContentParser {
         return HTML_WHITESPACE.matcher(text).replaceAll("\n").trim();
     }
 
-    /** Collects the first plain text body (HTML is only used as a fallback) and all attachments. */
+    /**
+     * Collects the first plain text body (HTML is only used as a fallback) and the attachment
+     * names.
+     */
     private static final class BodyCollector {
 
         private String plain;
         private String html;
-        private final List<MailAttachment> attachments = new ArrayList<>();
+        private final List<String> attachmentNames = new ArrayList<>();
 
         void plain(String value) {
             if (plain == null) {
@@ -246,10 +286,8 @@ public class OriginalEmailContentParser {
             }
         }
 
-        void attachment(String filename, Part part) throws MessagingException, IOException {
-            try (InputStream in = part.getInputStream()) {
-                attachments.add(new MailAttachment(filename, contentType(part), in.readAllBytes()));
-            }
+        void attachment(String filename) {
+            attachmentNames.add(filename);
         }
 
         String body() {
@@ -257,6 +295,22 @@ public class OriginalEmailContentParser {
                 return plain;
             }
             return html == null ? "" : htmlToText(html);
+        }
+
+        List<String> attachmentNames() {
+            return List.copyOf(attachmentNames);
+        }
+    }
+
+    /** Reads the attachment bytes of an archived mail; used when they are carried over. */
+    private static final class AttachmentCollector {
+
+        private final List<MailAttachment> attachments = new ArrayList<>();
+
+        void attachment(String filename, Part part) throws MessagingException, IOException {
+            try (InputStream in = part.getInputStream()) {
+                attachments.add(new MailAttachment(filename, contentType(part), in.readAllBytes()));
+            }
         }
 
         List<MailAttachment> attachments() {

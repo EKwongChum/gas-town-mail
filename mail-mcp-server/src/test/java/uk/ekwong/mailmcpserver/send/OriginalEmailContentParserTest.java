@@ -27,7 +27,8 @@ class OriginalEmailContentParserTest {
 
     @Test
     void readsHeadersBodyAndAttachments() {
-        OriginalEmailContent content = parser.parse(TestOriginalEmails.withAttachment());
+        byte[] raw = TestOriginalEmails.withAttachment();
+        OriginalEmailContent content = parser.parse(raw);
 
         assertThat(content.from()).isEqualTo("Alice <alice@example.com>");
         assertThat(content.replyTo()).isEqualTo("Alice Replies <alice.reply@example.com>");
@@ -39,8 +40,10 @@ class OriginalEmailContentParserTest {
         assertThat(content.date()).isEqualTo(Instant.parse("2026-08-16T01:30:00Z"));
         assertThat(content.textBody()).contains("please review the numbers.");
 
-        assertThat(content.attachments()).hasSize(1);
-        MailAttachment attachment = content.attachments().get(0);
+        assertThat(content.attachmentNames()).containsExactly("report.pdf");
+
+        assertThat(parser.readAttachments(raw)).hasSize(1);
+        MailAttachment attachment = parser.readAttachments(raw).get(0);
         assertThat(attachment.filename()).isEqualTo("report.pdf");
         assertThat(attachment.contentType()).isEqualTo("application/pdf");
         assertThat(attachment.content()).isEqualTo(TestOriginalEmails.ATTACHMENT_BYTES);
@@ -51,7 +54,7 @@ class OriginalEmailContentParserTest {
         OriginalEmailContent content = parser.parse(TestOriginalEmails.htmlOnly());
 
         assertThat(content.textBody()).isEqualTo("Hello Bob\n\nplease review");
-        assertThat(content.attachments()).isEmpty();
+        assertThat(content.attachmentNames()).isEmpty();
         assertThat(content.references()).isEmpty();
     }
 
@@ -61,7 +64,7 @@ class OriginalEmailContentParserTest {
 
         assertThat(content.replyTo()).isNull();
         assertThat(content.textBody()).contains("Just a plain body.");
-        assertThat(content.attachments()).isEmpty();
+        assertThat(content.attachmentNames()).isEmpty();
     }
 
     @Test
@@ -70,6 +73,6 @@ class OriginalEmailContentParserTest {
 
         assertThat(content.from()).isNull();
         assertThat(content.textBody()).isEmpty();
-        assertThat(content.attachments()).isEmpty();
+        assertThat(content.attachmentNames()).isEmpty();
     }
 }

@@ -211,6 +211,18 @@ class MailSendControllerTest {
     }
 
     @Test
+    void returns403ForAnSmtpHostOutsideTheAllowList() throws Exception {
+        properties.setAllowedSmtpHosts(List.of("smtp.example.com"));
+        Map<String, Object> request = sendRequest();
+        request.put("smtpHost", "evil.example.com");
+
+        mockMvc.perform(json("/api/mails/send", request))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(containsString("is not allowed")));
+        assertThat(transport.isEmpty()).isTrue();
+    }
+
+    @Test
     void sendsMailWithUploadedMultipartAttachments() throws Exception {
         MockMultipartFile attachment =
                 new MockMultipartFile(

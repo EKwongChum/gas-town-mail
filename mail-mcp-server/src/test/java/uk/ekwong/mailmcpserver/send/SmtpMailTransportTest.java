@@ -40,6 +40,8 @@ import org.junit.jupiter.api.Test;
 import org.subethamail.smtp.MessageContext;
 import org.subethamail.smtp.MessageHandler;
 import org.subethamail.smtp.MessageHandlerFactory;
+import org.subethamail.smtp.auth.EasyAuthenticationHandlerFactory;
+import org.subethamail.smtp.auth.LoginFailedException;
 import org.subethamail.smtp.server.SMTPServer;
 
 /** End-to-end test: a real SMTP conversation against an embedded server. */
@@ -69,7 +71,9 @@ class SmtpMailTransportTest {
                                             "text/plain",
                                             "attachment-data".getBytes(StandardCharsets.UTF_8))),
                             null,
-                            List.of());
+                            List.of(),
+                            null,
+                            "<end-to-end@example.com>");
 
             MailSendResponse response = service.send(command);
             byte[] raw = server.received();
@@ -121,7 +125,9 @@ class SmtpMailTransportTest {
                         false,
                         List.of(),
                         null,
-                        List.of());
+                        List.of(),
+                        null,
+                        "<unreachable@example.com>");
 
         assertThatThrownBy(() -> service.send(command))
                 .isInstanceOf(MailSendFailedException.class)
@@ -134,6 +140,95 @@ class SmtpMailTransportTest {
         }
     }
 
+    @Test
+    void authenticatesAndSendsWithTheEnvelopeSenderOfTheCommand() throws Exception {
+        CapturingServer server = new CapturingServer();
+        server.requireAuthentication("alice@example.com", "secret");
+        server.start();
+        try {
+            MailSendService service =
+                    new MailSendService(new SmtpMailTransport(new MailSendProperties()));
+            MailSendCommand command =
+                    new MailSendCommand(
+                            new SmtpSettings(
+                                    "127.0.0.1",
+                                    server.port(),
+                                    "alice@example.com",
+                                    "secret",
+                                    SmtpEncryption.NONE),
+                            "Alice <alice@example.com>",
+                            List.of("bob@example.com"),
+                            List.of(),
+                            "Authenticated",
+                            "Body",
+                            false,
+                            List.of(),
+                            null,
+                            List.of(),
+                            "noreply@example.com",
+                            "<authenticated@example.com>");
+
+            service.send(command);
+            server.received();
+
+            assertThat(server.authenticatedUsers()).containsExactly("alice@example.com");
+            // the envelope sender comes from the command, not from the From header
+            assertThat(server.envelopeSender()).isEqualTo("noreply@example.com");
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    void configuresTheSessionForTheRequestedDelivery() {
+        MailSendProperties properties = new MailSendProperties();
+        SmtpMailTransport transport = new SmtpMailTransport(properties);
+
+        Session starttls =
+                transport.session(
+                        command(SmtpEncryption.STARTTLS, "alice@example.com", "alice@example.com"));
+        assertThat(starttls.getProperty("mail.smtp.starttls.enable")).isEqualTo("true");
+        assertThat(starttls.getProperty("mail.smtp.starttls.required")).isEqualTo("true");
+        assertThat(starttls.getProperty("mail.smtp.ssl.checkserveridentity")).isEqualTo("true");
+        assertThat(starttls.getProperty("mail.smtp.auth")).isEqualTo("true");
+        assertThat(starttls.getProperty("mail.smtp.from")).isEqualTo("alice@example.com");
+        assertThat(starttls.getProperty("mail.smtp.connectiontimeout")).isEqualTo("10000");
+        assertThat(starttls.getProperty("mail.smtp.timeout")).isEqualTo("30000");
+        assertThat(starttls.getProperty("mail.smtp.writetimeout")).isEqualTo("60000");
+
+        Session ssl = transport.session(command(SmtpEncryption.SSL, "alice@example.com", null));
+        assertThat(ssl.getProperty("mail.smtp.ssl.enable")).isEqualTo("true");
+        assertThat(ssl.getProperty("mail.smtp.ssl.checkserveridentity")).isEqualTo("true");
+
+        Session plain = transport.session(command(SmtpEncryption.NONE, null, null));
+        assertThat(plain.getProperty("mail.smtp.auth")).isEqualTo("false");
+        assertThat(plain.getProperty("mail.smtp.from")).isNull();
+
+        properties.setVerifyServerIdentity(false);
+        assertThat(
+                        transport
+                                .session(command(SmtpEncryption.SSL, "alice@example.com", null))
+                                .getProperty("mail.smtp.ssl.checkserveridentity"))
+                .isEqualTo("false");
+    }
+
+    private MailSendCommand command(
+            SmtpEncryption encryption, String envelopeFrom, String username) {
+        return new MailSendCommand(
+                new SmtpSettings("127.0.0.1", 2525, username, "secret", encryption),
+                "Alice <alice@example.com>",
+                List.of("bob@example.com"),
+                List.of(),
+                "Subject",
+                "Body",
+                false,
+                List.of(),
+                null,
+                List.of(),
+                envelopeFrom,
+                "<session@example.com>");
+    }
+
     /** Embedded SMTP server that captures the envelope and the message data. */
     private static final class CapturingServer {
 
@@ -142,16 +237,42 @@ class SmtpMailTransportTest {
         private final List<byte[]> messages = new ArrayList<>();
         private String envelopeSender;
         private final List<String> envelopeRecipients = new ArrayList<>();
+        private final List<String> authenticatedUsers = new ArrayList<>();
+        private String requiredUsername;
+        private String requiredPassword;
         private SMTPServer server;
+
+        void requireAuthentication(String username, String password) {
+            this.requiredUsername = username;
+            this.requiredPassword = password;
+        }
 
         void start() throws IOException {
             port = freePort();
-            server =
+            SMTPServer.Builder builder =
                     SMTPServer.port(port)
                             .hostName("test.local")
-                            .messageHandlerFactory(new HandlerFactory())
-                            .build();
+                            .messageHandlerFactory(new HandlerFactory());
+            if (requiredUsername != null) {
+                builder =
+                        builder.authenticationHandlerFactory(
+                                        new EasyAuthenticationHandlerFactory(
+                                                (username, password, context) -> {
+                                                    if (!requiredUsername.equals(username)
+                                                            || !requiredPassword.equals(password)) {
+                                                        throw new LoginFailedException(
+                                                                "invalid credentials");
+                                                    }
+                                                    authenticatedUsers.add(username);
+                                                }))
+                                .requireAuth();
+            }
+            server = builder.build();
             server.start();
+        }
+
+        List<String> authenticatedUsers() {
+            return authenticatedUsers;
         }
 
         void stop() {

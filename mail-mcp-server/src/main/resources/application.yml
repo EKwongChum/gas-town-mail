@@ -47,6 +47,24 @@ app:
     connect-timeout: ${MAIL_SEND_CONNECT_TIMEOUT:10s}
     read-timeout: ${MAIL_SEND_READ_TIMEOUT:30s}
     write-timeout: ${MAIL_SEND_WRITE_TIMEOUT:60s}
+    # SMTP servers the endpoints may deliver to (empty = any, wildcards like *.example.com allowed)
+    allowed-smtp-hosts: ${MAIL_SEND_ALLOWED_SMTP_HOSTS:}
+    # Certificate host name verification; disable only for self-signed servers
+    verify-server-identity: ${MAIL_SEND_VERIFY_SERVER_IDENTITY:true}
+    # Allow SMTP passwords over an unencrypted connection (not recommended)
+    allow-plaintext-credentials: ${MAIL_SEND_ALLOW_PLAINTEXT_CREDENTIALS:false}
+    rate-limit:
+      # Requests per client per minute on /api/mails/*; 0 disables the limit
+      requests-per-minute: ${MAIL_SEND_RATE_LIMIT_PER_MINUTE:0}
+      # Use the first X-Forwarded-For entry when running behind a reverse proxy
+      trust-forwarded-for: ${MAIL_SEND_TRUST_FORWARDED_FOR:false}
+  security:
+    # Shared secret required on protected-paths; blank keeps the endpoints open (dev default)
+    api-key: ${APP_SECURITY_API_KEY:}
+    header-name: ${APP_SECURITY_HEADER_NAME:X-API-Key}
+    protected-paths:
+      - /api/mails/**
+      - /mcp
   storage:
     s3:
       endpoint: http://localhost:9000

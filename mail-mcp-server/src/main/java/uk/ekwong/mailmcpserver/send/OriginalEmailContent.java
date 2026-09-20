@@ -28,6 +28,8 @@ import java.util.List;
  * @param references values of the {@code References} header, newest last
  * @param date value of the {@code Date} header
  * @param textBody plain text body extracted from the mail, empty when the mail has no text part
+ * @param attachmentNames file names of the attachments; the bytes are read on demand (see {@code
+ *     OriginalEmailContentParser#readAttachments})
  */
 public record OriginalEmailContent(
         String from,
@@ -39,13 +41,13 @@ public record OriginalEmailContent(
         List<String> references,
         Instant date,
         String textBody,
-        List<MailAttachment> attachments) {
+        List<String> attachmentNames) {
 
     public OriginalEmailContent {
         to = to == null ? List.of() : List.copyOf(to);
         cc = cc == null ? List.of() : List.copyOf(cc);
         references = references == null ? List.of() : List.copyOf(references);
-        attachments = attachments == null ? List.of() : List.copyOf(attachments);
+        attachmentNames = attachmentNames == null ? List.of() : List.copyOf(attachmentNames);
         textBody = textBody == null ? "" : textBody;
     }
 }

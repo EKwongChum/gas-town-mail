@@ -261,16 +261,59 @@ MCP 调用示例（JSON-RPC，真实投递）：
 
 | 状态码 | 场景 |
 | --- | --- |
+| `401` | 配置了 `app.security.api-key` 但请求未携带或携带了错误的 key（受保护路径默认是 `/api/mails/**` 与 `/mcp`） |
 | `400` | 缺少 `smtpHost` / `smtpPort`、地址格式非法、附件缺文件名或非 Base64、附件超限、转发未传 `to`、请求体不是合法 JSON |
+| `403` | `smtpHost` 不在 `app.send.allowed-smtp-hosts` 白名单内 |
 | `404` | reply / forward 的 `id` 在对象存储中不存在（可能尚未归档或已被清理） |
 | `413` | multipart 上传超过 servlet 层 `spring.servlet.multipart.*` 上限（多数容器直接返回，此时无响应体） |
 | `415` | 请求的 Content-Type 既不是 `application/json` 也不是 `multipart/form-data` |
+| `429` | 超过 `app.send.rate-limit.requests-per-minute`（响应带 `Retry-After`，按客户端 IP 计数） |
 | `502` | SMTP 服务器不可达、认证失败或被拒收（错误信息包含 SMTP 返回的原因） |
 | `500` | 其他未预期错误（详情只记日志） |
+
+## 鉴权、白名单与限流
+
+发信接口会真实投递邮件，因此提供三层保护，均可在 `application.yml` / 环境变量中配置：
+
+| 配置 | 默认值 | 说明 |
+| --- | --- | --- |
+| `app.security.api-key` | 空（不校验） | 设为非空后，`app.security.protected-paths`（默认 `/api/mails/**` 与 `/mcp`）的请求必须携带 `X-API-Key: <key>` 或 `Authorization: Bearer <key>`，否则返回 `401`；比较使用常量时间算法 |
+| `app.send.allowed-smtp-hosts` | 空（不限） | 只允许投递到列表中的 SMTP 服务器，支持 `*.example.com` 通配（只匹配子域）；不在列表内返回 `403` |
+| `app.send.rate-limit.requests-per-minute` | `0`（不限） | 每个客户端 IP 每分钟允许的 `/api/mails/*` 请求数，超限返回 `429` 与 `Retry-After` |
+| `app.send.rate-limit.trust-forwarded-for` | `false` | 部署在反向代理后时用 `X-Forwarded-For` 的第一个地址作为客户端标识 |
+
+```yaml
+app:
+  security:
+    api-key: ${APP_SECURITY_API_KEY:}
+    protected-paths:
+      - /api/mails/**
+      - /mcp
+  send:
+    allowed-smtp-hosts:
+      - smtp.example.com
+      - "*.corp.example"
+    rate-limit:
+      requests-per-minute: 30
+```
+
+未配置 `api-key` 或未配置白名单时，应用启动会打印 WARN 日志提醒。MCP 侧的发信工具同样受
+API key 与白名单约束（工具错误文本里会给出原因），目前不对 MCP 调用单独做速率限制。
+
+## 传输安全与投递身份
+
+| 配置 | 默认值 | 说明 |
+| --- | --- | --- |
+| `app.send.verify-server-identity` | `true` | 校验 SMTP 服务器证书的主机名（`mail.smtp.ssl.checkserveridentity`）；只有自签证书的内网服务器才需要关闭 |
+| `app.send.allow-plaintext-credentials` | `false` | 默认拒绝在未加密连接上发送密码：带账号的请求会强制 `STARTTLS`（465 端口用隐式 TLS），显式 `smtpEncryption=none` 会被拒绝，除非打开该开关 |
+
+信封发件人（SMTP `MAIL FROM`）默认取请求中的 `smtpUsername`（未认证时回退到 `From` 地址），
+避免按认证账号校验的服务器因别名/显示名拒收；响应中的 `envelopeFrom` 会回传实际使用的地址。
 
 ## 安全与注意事项
 
 - SMTP 账号密码只用于当次发送，不落库、不写日志；日志只记录目标服务器、收件人数量与附件数量。
-- 这三个接口没有鉴权，且能以任意凭据对外发信，生产环境请部署在内网或加认证/白名单。
+- 生产环境务必配置 `app.security.api-key` 与 `app.send.allowed-smtp-hosts`：否则任何能访问 8082
+  的人都可以用任意 SMTP 凭据发信；也可以在此基础上叠加网关鉴权与网络白名单。
 - 发信是同步的：请求会等到 SMTP 服务器接受邮件后才返回，超时时间由 `app.send.*-timeout` 控制。
 - 归档原件的正文引用统一转换为纯文本（HTML 邮件会去标签后引用），避免在转发内容中引入原始 HTML。

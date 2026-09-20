@@ -109,6 +109,11 @@ services:
       SPRING_PROFILES_ACTIVE: json
       SPRING_ELASTICSEARCH_URIS: http://elasticsearch:9200
       APP_STORAGE_S3_ENDPOINT: http://minio:9000
+      # Outbound mail: require an API key and limit which SMTP servers may be used
+      # (APP_SECURITY_API_KEY=<secret>, MAIL_SEND_ALLOWED_SMTP_HOSTS=smtp.example.com,*.corp.example)
+      APP_SECURITY_API_KEY: ${APP_SECURITY_API_KEY:-}
+      MAIL_SEND_ALLOWED_SMTP_HOSTS: ${MAIL_SEND_ALLOWED_SMTP_HOSTS:-}
+      MAIL_SEND_RATE_LIMIT_PER_MINUTE: ${MAIL_SEND_RATE_LIMIT_PER_MINUTE:-0}
       APP_ROCKETMQ_NAMESERVER: rocketmq-namesrv:9876
 
   # MCP 查询应用：标准 MCP (Streamable HTTP) 接口，查询 Elasticsearch mail_info；
