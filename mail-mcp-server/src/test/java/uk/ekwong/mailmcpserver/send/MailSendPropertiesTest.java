@@ -121,6 +121,43 @@ class MailSendPropertiesTest {
                         });
     }
 
+    @Test
+    void bindsTheDeliverySafetyDefaults() {
+        contextRunner.run(
+                context -> {
+                    MailSendProperties properties = context.getBean(MailSendProperties.class);
+                    assertThat(properties.getIdempotencyTtl()).isEqualTo(Duration.ofMinutes(15));
+                    assertThat(properties.getAsync().isEnabled()).isTrue();
+                    assertThat(properties.getAsync().getThreads()).isEqualTo(2);
+                    assertThat(properties.getAsync().getQueueCapacity()).isEqualTo(50);
+                    assertThat(properties.getAsync().getTaskTtl())
+                            .isEqualTo(Duration.ofMinutes(15));
+                });
+    }
+
+    @Test
+    void bindsOverriddenDeliveryValues() {
+        contextRunner
+                .withPropertyValues(
+                        "app.send.idempotency-ttl=1m",
+                        "app.send.async.enabled=false",
+                        "app.send.async.threads=4",
+                        "app.send.async.queue-capacity=10",
+                        "app.send.async.task-ttl=2m")
+                .run(
+                        context -> {
+                            MailSendProperties properties =
+                                    context.getBean(MailSendProperties.class);
+                            assertThat(properties.getIdempotencyTtl())
+                                    .isEqualTo(Duration.ofMinutes(1));
+                            assertThat(properties.getAsync().isEnabled()).isFalse();
+                            assertThat(properties.getAsync().getThreads()).isEqualTo(4);
+                            assertThat(properties.getAsync().getQueueCapacity()).isEqualTo(10);
+                            assertThat(properties.getAsync().getTaskTtl())
+                                    .isEqualTo(Duration.ofMinutes(2));
+                        });
+    }
+
     @Configuration(proxyBeanMethods = false)
     @EnableConfigurationProperties({MailSendProperties.class, SecurityProperties.class})
     static class TestConfiguration {}

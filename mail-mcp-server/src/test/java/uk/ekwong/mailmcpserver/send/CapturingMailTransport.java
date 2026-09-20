@@ -62,6 +62,11 @@ public final class CapturingMailTransport implements MailTransport {
         return sent.isEmpty();
     }
 
+    /** Number of messages handed to the transport. */
+    public int size() {
+        return sent.size();
+    }
+
     /** The last message that was handed to the transport, as it would appear on the wire. */
     public MimeMessage lastMessage() throws MessagingException {
         byte[] raw = sent.get(sent.size() - 1);

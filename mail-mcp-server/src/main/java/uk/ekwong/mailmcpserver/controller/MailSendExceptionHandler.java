@@ -28,6 +28,9 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import uk.ekwong.mailmcpserver.download.OriginalMailNotFoundException;
 import uk.ekwong.mailmcpserver.send.MailSendFailedException;
+import uk.ekwong.mailmcpserver.send.MailSendInProgressException;
+import uk.ekwong.mailmcpserver.send.MailSendQueueFullException;
+import uk.ekwong.mailmcpserver.send.MailSendTaskNotFoundException;
 import uk.ekwong.mailmcpserver.send.SmtpHostNotAllowedException;
 
 /**
@@ -98,6 +101,25 @@ public class MailSendExceptionHandler {
     public ResponseEntity<ApiError> handleSendFailed(MailSendFailedException e) {
         log.error("Sending mail failed: {}", e.getMessage(), e);
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiError(e.getMessage()));
+    }
+
+    @ExceptionHandler(MailSendTaskNotFoundException.class)
+    public ResponseEntity<ApiError> handleTaskNotFound(MailSendTaskNotFoundException e) {
+        log.warn("Unknown mail delivery task: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiError(e.getMessage()));
+    }
+
+    @ExceptionHandler(MailSendInProgressException.class)
+    public ResponseEntity<ApiError> handleDeliveryInProgress(MailSendInProgressException e) {
+        log.warn("Duplicate mail request: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(e.getMessage()));
+    }
+
+    @ExceptionHandler(MailSendQueueFullException.class)
+    public ResponseEntity<ApiError> handleQueueFull(MailSendQueueFullException e) {
+        log.warn("Background delivery queue is full");
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new ApiError(e.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

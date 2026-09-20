@@ -16,6 +16,7 @@
 | `/api/mails/send` | POST | 通过请求中的 SMTP 服务器发送邮件（附件：JSON Base64 或 multipart 文件分片） |
 | `/api/mails/reply` | POST | 回复归档邮件：发送参数 + MCP 查询返回的 `id` |
 | `/api/mails/forward` | POST | 转发归档邮件：发送参数 + MCP 查询返回的 `id` |
+| `/api/mails/tasks/{id}` | GET | 查询 `Prefer: respond-async` 后台投递的状态与结果 |
 | `/v3/api-docs` | GET | OpenAPI JSON 文档 |
 | `/swagger-ui.html` | GET | Swagger UI 可视化文档 |
 | `/actuator/health` | GET | 健康检查（Elasticsearch + 对象存储 bucket） |
@@ -310,6 +311,13 @@ multipart 的额外上限是 `spring.servlet.multipart.max-file-size` / `max-req
 
 上述约束对 MCP 的 `send_mail` / `reply_mail` / `forward_mail` 同样生效（以工具错误文本返回）。
 
+重试与异步投递：
+
+- `Idempotency-Key: <key>`：同一 key 的重复请求返回第一次的结果，不再重复投递（投递中的重复请求
+  返回 `409`，失败会释放 key 以便重试）；
+- `Prefer: respond-async`：立即返回 `202` 与任务 id，用 `GET /api/mails/tasks/{id}` 查询
+  `PENDING` / `SUCCEEDED` / `FAILED` 状态。
+
 ## 六、构建与运行
 
 ```bash
@@ -356,6 +364,10 @@ docker build -f mail-mcp-server/Dockerfile -t mail-mcp-server .
 | `app.send.allow-plaintext-credentials` | `false` | 是否允许在未加密连接上发送 SMTP 密码（默认拒绝，会强制 STARTTLS/SSL） |
 | `app.send.rate-limit.requests-per-minute` | `0`（不限） | 每个客户端 IP 每分钟允许的 `/api/mails/*` 请求数，超限返回 `429` |
 | `app.send.rate-limit.trust-forwarded-for` | `false` | 反向代理后按 `X-Forwarded-For` 第一个地址区分客户端 |
+| `app.send.idempotency-ttl` | `15m` | `Idempotency-Key` 的去重记忆时长，`0` 关闭 |
+| `app.send.async.enabled` | `true` | 是否允许 `Prefer: respond-async` 后台投递 |
+| `app.send.async.threads` / `queue-capacity` | `2` / `50` | 后台投递线程数与队列长度，队列满返回 `429` |
+| `app.send.async.task-ttl` | `15m` | 后台任务状态保留时长 |
 | `app.security.api-key` | 空（不校验） | 设置后，`app.security.protected-paths`（默认 `/api/mails/**`、`/mcp`）需要 `X-API-Key` 或 `Authorization: Bearer`，否则 `401` |
 | `app.security.header-name` | `X-API-Key` | 读取 key 的请求头名 |
 | `app.security.protected-paths` | `/api/mails/**`、`/mcp` | 需要 API key 的路径（Ant 风格） |

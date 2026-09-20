@@ -17,6 +17,8 @@
 package uk.ekwong.mailmcpserver.send;
 
 import jakarta.annotation.PostConstruct;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -185,6 +187,31 @@ public class MailSendRequestMapper {
                         + describe(DataSize.ofBytes(bytes))
                         + " exceeds the limit of "
                         + describe(properties.getMaxTotalAttachmentSize()));
+    }
+
+    /**
+     * Reads the attachments into memory. Needed for a background delivery of a multipart request:
+     * the temporary files of the servlet container are gone once the request has finished.
+     */
+    public MailSendCommand materializeAttachments(MailSendCommand command) {
+        List<MailAttachment> materialized = new ArrayList<>(command.attachments().size());
+        for (MailAttachment attachment : command.attachments()) {
+            materialized.add(
+                    MailAttachment.of(
+                            attachment.filename(),
+                            attachment.contentType(),
+                            readContent(attachment)));
+        }
+        return command.withAttachments(materialized);
+    }
+
+    private byte[] readContent(MailAttachment attachment) {
+        try (InputStream in = attachment.content().open()) {
+            return in.readAllBytes();
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "could not read the uploaded attachment '" + attachment.filename() + "'", e);
+        }
     }
 
     private SmtpSettings smtpSettings(MailSendFields request) {

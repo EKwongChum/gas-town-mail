@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -38,18 +39,23 @@ import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.RequestBuilder;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.util.unit.DataSize;
 import uk.ekwong.mailcommon.storage.ObjectStorageService;
 import uk.ekwong.mailmcpserver.send.CapturingMailTransport;
 import uk.ekwong.mailmcpserver.send.MailCompositionService;
+import uk.ekwong.mailmcpserver.send.MailSendIdempotencyStore;
 import uk.ekwong.mailmcpserver.send.MailSendProperties;
 import uk.ekwong.mailmcpserver.send.MailSendRequestMapper;
 import uk.ekwong.mailmcpserver.send.MailSendService;
+import uk.ekwong.mailmcpserver.send.MailSendTaskService;
+import uk.ekwong.mailmcpserver.send.MailSendTaskStore;
 import uk.ekwong.mailmcpserver.send.OriginalEmailContentParser;
 import uk.ekwong.mailmcpserver.send.TestOriginalEmails;
 
@@ -63,23 +69,31 @@ class MailSendControllerTest {
     private final CapturingMailTransport transport = new CapturingMailTransport();
 
     private MailSendProperties properties;
+    private MailSendIdempotencyStore idempotencyStore;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         properties = new MailSendProperties();
+        idempotencyStore = new MailSendIdempotencyStore(properties);
+        mockMvc = mockMvc(new InlineTaskExecutor());
+    }
+
+    private MockMvc mockMvc(AsyncTaskExecutor executor) {
         MailSendRequestMapper requestMapper = new MailSendRequestMapper(properties);
-        mockMvc =
-                MockMvcBuilders.standaloneSetup(
-                                new MailSendController(
-                                        new MailSendService(transport, new SimpleMeterRegistry()),
-                                        requestMapper,
-                                        new MailCompositionService(
-                                                requestMapper,
-                                                storage,
-                                                new OriginalEmailContentParser())))
-                        .setControllerAdvice(new MailSendExceptionHandler())
-                        .build();
+        MailSendService sendService = new MailSendService(transport, new SimpleMeterRegistry());
+        return MockMvcBuilders.standaloneSetup(
+                        new MailSendController(
+                                sendService,
+                                requestMapper,
+                                new MailCompositionService(
+                                        requestMapper, storage, new OriginalEmailContentParser()),
+                                idempotencyStore,
+                                new MailSendTaskService(
+                                        sendService, new MailSendTaskStore(properties), executor),
+                                properties))
+                .setControllerAdvice(new MailSendExceptionHandler())
+                .build();
     }
 
     @Test
@@ -331,6 +345,90 @@ class MailSendControllerTest {
                 .andExpect(jsonPath("$.error").value(containsString("multipart/form-data")));
     }
 
+    @Test
+    void replaysAnIdempotentRequestWithoutSendingTwice() throws Exception {
+        Map<String, Object> request = sendRequest();
+
+        String first =
+                mockMvc.perform(json("/api/mails/send", request).header("Idempotency-Key", "key-1"))
+                        .andExpect(status().isOk())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        String second =
+                mockMvc.perform(json("/api/mails/send", request).header("Idempotency-Key", "key-1"))
+                        .andExpect(status().isOk())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+
+        assertThat(second).isEqualTo(first);
+        assertThat(transport.size()).isEqualTo(1);
+    }
+
+    @Test
+    void returns409WhileAnIdempotentRequestIsStillRunning() throws Exception {
+        idempotencyStore.reserve("key-2");
+
+        mockMvc.perform(json("/api/mails/send", sendRequest()).header("Idempotency-Key", "key-2"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value(containsString("still being sent")));
+        assertThat(transport.isEmpty()).isTrue();
+    }
+
+    @Test
+    void rejectsABlankIdempotencyKey() throws Exception {
+        mockMvc.perform(json("/api/mails/send", sendRequest()).header("Idempotency-Key", "   "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(containsString("Idempotency-Key")));
+    }
+
+    @Test
+    void acceptsABackgroundDeliveryAndExposesItsTask() throws Exception {
+        String accepted =
+                mockMvc.perform(
+                                json("/api/mails/send", sendRequest())
+                                        .header("Prefer", "respond-async"))
+                        .andExpect(status().isAccepted())
+                        .andExpect(jsonPath("$.taskId").isNotEmpty())
+                        .andExpect(jsonPath("$.status").value("PENDING"))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        String taskId = objectMapper.readTree(accepted).get("taskId").asText();
+        assertThat(transport.size()).isEqualTo(1);
+
+        mockMvc.perform(get("/api/mails/tasks/" + taskId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCEEDED"))
+                .andExpect(jsonPath("$.response.messageId").isNotEmpty());
+    }
+
+    @Test
+    void rejectsBackgroundDeliveryWhenItIsDisabled() throws Exception {
+        properties.getAsync().setEnabled(false);
+
+        mockMvc.perform(json("/api/mails/send", sendRequest()).header("Prefer", "respond-async"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(containsString("asynchronous delivery")));
+    }
+
+    @Test
+    void returns429WhenTheBackgroundQueueIsFull() throws Exception {
+        mockMvc = mockMvc(new RejectingTaskExecutor());
+
+        mockMvc.perform(json("/api/mails/send", sendRequest()).header("Prefer", "respond-async"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.error").value(containsString("background deliveries")));
+    }
+
+    @Test
+    void returns404ForAnUnknownDeliveryTask() throws Exception {
+        mockMvc.perform(get("/api/mails/tasks/unknown"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value(containsString("unknown")));
+    }
+
     private MockMultipartFile requestPart(Map<String, Object> body) throws Exception {
         return new MockMultipartFile(
                 "request",
@@ -356,7 +454,8 @@ class MailSendControllerTest {
         return request;
     }
 
-    private RequestBuilder json(String path, Map<String, Object> body) throws Exception {
+    private MockHttpServletRequestBuilder json(String path, Map<String, Object> body)
+            throws Exception {
         return post(path)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(body));
@@ -364,5 +463,32 @@ class MailSendControllerTest {
 
     private String base64(String value) {
         return Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** Runs background deliveries on the calling thread so the tests stay deterministic. */
+    private static final class InlineTaskExecutor implements AsyncTaskExecutor {
+
+        @Override
+        public void execute(Runnable task) {
+            task.run();
+        }
+
+        @Override
+        public void execute(Runnable task, long startTimeout) {
+            task.run();
+        }
+    }
+
+    private static final class RejectingTaskExecutor implements AsyncTaskExecutor {
+
+        @Override
+        public void execute(Runnable task) {
+            throw new TaskRejectedException("queue is full");
+        }
+
+        @Override
+        public void execute(Runnable task, long startTimeout) {
+            throw new TaskRejectedException("queue is full");
+        }
     }
 }

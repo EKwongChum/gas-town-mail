@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import uk.ekwong.mailmcpserver.send.MailSendProperties;
 import uk.ekwong.mailmcpserver.send.MailSendRateLimiter;
@@ -49,7 +50,7 @@ class MailSendRateLimitFilterTest {
     @Test
     void isDisabledByDefault() throws Exception {
         for (int i = 0; i < 5; i++) {
-            mockMvc.perform(get("/api/mails/probe")).andExpect(status().isOk());
+            mockMvc.perform(get("/api/mails/send")).andExpect(status().isOk());
         }
     }
 
@@ -57,8 +58,8 @@ class MailSendRateLimitFilterTest {
     void answers429WithRetryAfterWhenTheLimitIsExceeded() throws Exception {
         properties.getRateLimit().setRequestsPerMinute(1);
 
-        mockMvc.perform(get("/api/mails/probe")).andExpect(status().isOk());
-        mockMvc.perform(get("/api/mails/probe"))
+        mockMvc.perform(get("/api/mails/send")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/mails/send"))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().exists("Retry-After"))
                 .andExpect(jsonPath("$.error").value(containsString("Too many mail requests")));
@@ -68,16 +69,23 @@ class MailSendRateLimitFilterTest {
     void doesNotLimitOtherPaths() throws Exception {
         properties.getRateLimit().setRequestsPerMinute(1);
 
-        mockMvc.perform(get("/api/mails/probe")).andExpect(status().isOk());
+        mockMvc.perform(get("/api/mails/send")).andExpect(status().isOk());
         mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
         mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
+        // polling a delivery task must not consume the send quota
+        mockMvc.perform(get("/api/mails/tasks/task-1")).andExpect(status().isOk());
     }
 
     @RestController
     static class ProbeController {
 
-        @GetMapping("/api/mails/probe")
+        @GetMapping("/api/mails/send")
         String mailProbe() {
+            return "ok";
+        }
+
+        @GetMapping("/api/mails/tasks/{id}")
+        String taskProbe(@PathVariable String id) {
             return "ok";
         }
 

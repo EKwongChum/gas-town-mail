@@ -61,6 +61,8 @@ public class MailSendProperties {
     private boolean allowPlaintextCredentials;
 
     private RateLimit rateLimit = new RateLimit();
+    private Duration idempotencyTtl = Duration.ofMinutes(15);
+    private Async async = new Async();
 
     public DataSize getMaxAttachmentSize() {
         return maxAttachmentSize;
@@ -134,6 +136,26 @@ public class MailSendProperties {
         this.rateLimit = rateLimit;
     }
 
+    /**
+     * How long an {@code Idempotency-Key} is remembered: a repeated request with the same key
+     * returns the first result instead of delivering the mail twice. Zero disables the check.
+     */
+    public Duration getIdempotencyTtl() {
+        return idempotencyTtl;
+    }
+
+    public void setIdempotencyTtl(Duration idempotencyTtl) {
+        this.idempotencyTtl = idempotencyTtl;
+    }
+
+    public Async getAsync() {
+        return async;
+    }
+
+    public void setAsync(Async async) {
+        this.async = async;
+    }
+
     /** Per-client limit of the outbound mail endpoints; disabled when requests per minute is 0. */
     public static class RateLimit {
 
@@ -161,6 +183,47 @@ public class MailSendProperties {
 
         public void setTrustForwardedFor(boolean trustForwardedFor) {
             this.trustForwardedFor = trustForwardedFor;
+        }
+    }
+
+    /** Background delivery of a request that asked for it with {@code Prefer: respond-async}. */
+    public static class Async {
+
+        private boolean enabled = true;
+        private int threads = 2;
+        private int queueCapacity = 50;
+        private Duration taskTtl = Duration.ofMinutes(15);
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public int getThreads() {
+            return threads;
+        }
+
+        public void setThreads(int threads) {
+            this.threads = threads;
+        }
+
+        public int getQueueCapacity() {
+            return queueCapacity;
+        }
+
+        public void setQueueCapacity(int queueCapacity) {
+            this.queueCapacity = queueCapacity;
+        }
+
+        public Duration getTaskTtl() {
+            return taskTtl;
+        }
+
+        public void setTaskTtl(Duration taskTtl) {
+            this.taskTtl = taskTtl;
         }
     }
 }

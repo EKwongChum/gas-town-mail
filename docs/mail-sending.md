@@ -256,7 +256,44 @@ MCP 调用示例（JSON-RPC，真实投递）：
 - SMTP 凭据同样由每次调用传入、服务端不保存；工具描述已提示这是真实投递（
   `readOnlyHint=false`、`openWorldHint=true`）并提示不要回显密码；
 - 参数校验失败、归档原件缺失、SMTP 不可达/被拒收都返回 `isError=true` 的错误文本，
-  不抛协议级异常。
+  不抛协议级异常；
+- 三个发信工具与 HTTP 接口共用 `app.send.rate-limit.requests-per-minute` 限流，MCP 调用按
+  **会话**计数（工具调用拿不到客户端 IP），超限时返回 "Too many mail tool calls…" 错误文本。
+
+## 幂等重试与异步投递
+
+**幂等键**：请求带上 `Idempotency-Key: <key>` 后，同一 key 的重复请求不会重复投递——已完成的
+请求直接返回第一次的结果（同步请求返回同样的 `200` 响应，异步请求返回同一个任务），仍在投递中的
+重复请求返回 `409`。key 默认记忆 15 分钟（`app.send.idempotency-ttl`，设为 `0` 关闭）。投递失败
+（如 SMTP 不可达）会释放 key，客户端可以用同一个 key 重试。key 最长 200 字符，空白 key 返回 `400`。
+
+**异步投递**：请求带上 `Prefer: respond-async` 后立即返回 `202` 与任务信息，邮件在后台投递：
+
+```bash
+curl -X POST http://localhost:8082/api/mails/send \
+  -H 'Content-Type: application/json' \
+  -H 'Prefer: respond-async' \
+  -H 'Idempotency-Key: order-42' \
+  -d '{ ... 与同步请求相同的请求体 ... }'
+
+# 202 Accepted（响应头带 Location）
+# {"taskId":"6f1c…","status":"PENDING","location":"/api/mails/tasks/6f1c…"}
+
+# 轮询结果
+curl http://localhost:8082/api/mails/tasks/6f1c…
+# {"id":"6f1c…","status":"SUCCEEDED","response":{…},"createdAt":"…","completedAt":"…"}
+```
+
+任务状态为 `PENDING` → `SUCCEEDED`（含完整投递结果）或 `FAILED`（含错误原因）；任务保留
+`app.send.async.task-ttl`（默认 15 分钟）后查询返回 `404`。后台线程池由
+`app.send.async.threads` / `queue-capacity` 限定，队列满时返回 `429`。
+
+注意：
+
+- multipart 上传配合异步投递时，上传内容会在返回 `202` 之前读入内存（后台任务无法访问请求的
+  临时文件），数据量仍受 10 MB / 20 MB 限制；
+- 只有投递本身在后台执行：参数校验、归档原件缺失、白名单不通过等仍同步返回错误；
+- 幂等键与任务状态都保存在内存中，多实例部署时只对同一实例的重复请求有效。
 
 ## 错误响应
 错误统一返回 JSON：`{"error": "..."}`。
@@ -266,10 +303,11 @@ MCP 调用示例（JSON-RPC，真实投递）：
 | `401` | 配置了 `app.security.api-key` 但请求未携带或携带了错误的 key（受保护路径默认是 `/api/mails/**` 与 `/mcp`） |
 | `400` | 缺少 `smtpHost` / `smtpPort`、地址格式非法、附件缺文件名或非 Base64、附件超限、转发未传 `to`、请求体不是合法 JSON |
 | `403` | `smtpHost` 不在 `app.send.allowed-smtp-hosts` 白名单内 |
-| `404` | reply / forward 的 `id` 在对象存储中不存在（可能尚未归档或已被清理） |
+| `404` | reply / forward 的 `id` 在对象存储中不存在（可能尚未归档或已被清理）；或异步任务 id 未知/已过期 |
+| `409` | 重复使用了仍在投递中的 `Idempotency-Key` |
 | `413` | multipart 上传超过 servlet 层 `spring.servlet.multipart.*` 上限（多数容器直接返回，此时无响应体） |
 | `415` | 请求的 Content-Type 既不是 `application/json` 也不是 `multipart/form-data` |
-| `429` | 超过 `app.send.rate-limit.requests-per-minute`（响应带 `Retry-After`，按客户端 IP 计数） |
+| `429` | 超过 `app.send.rate-limit.requests-per-minute`（响应带 `Retry-After`，按客户端 IP 计数）；或后台投递队列已满 |
 | `502` | SMTP 服务器不可达、认证失败或被拒收（错误信息包含 SMTP 返回的原因） |
 | `500` | 其他未预期错误（详情只记日志） |
 

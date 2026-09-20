@@ -9,6 +9,17 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Retry-safe and asynchronous delivery for the outbound mail endpoints: an optional
+  `Idempotency-Key` header replays the first result instead of sending twice (409 while the first
+  delivery is still running, and a failed attempt releases the key), and `Prefer: respond-async`
+  answers 202 with a task id polled at GET /api/mails/tasks/{id} (PENDING / SUCCEEDED / FAILED,
+  bounded pool, 429 when the queue is full). Configurable through app.send.idempotency-ttl and
+  app.send.async.*.
+- The MCP sending tools share app.send.rate-limit.requests-per-minute, counted per MCP session.
+- A real TLS end-to-end test (SmtpTlsEndToEndTest) with an embedded implicit-TLS SMTP server and a
+  test-only self-signed certificate: a matching certificate is accepted, a host name mismatch is
+  rejected while app.send.verify-server-identity is on, and the opt-out works.
+
 - Access control for the outbound mail endpoints: an optional shared API key
   (`app.security.api-key`, sent as `X-API-Key` or `Authorization: Bearer`) on
   `app.security.protected-paths` (default `/api/mails/**` and `/mcp`), an SMTP host allow list

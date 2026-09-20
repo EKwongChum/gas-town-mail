@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.modelcontextprotocol.server.McpServerFeatures;
+import io.modelcontextprotocol.server.McpSyncServerExchange;
 import io.modelcontextprotocol.spec.McpSchema;
 import jakarta.mail.MessagingException;
 import jakarta.mail.Multipart;
@@ -41,6 +42,7 @@ import uk.ekwong.mailcommon.storage.ObjectStorageService;
 import uk.ekwong.mailmcpserver.send.CapturingMailTransport;
 import uk.ekwong.mailmcpserver.send.MailCompositionService;
 import uk.ekwong.mailmcpserver.send.MailSendProperties;
+import uk.ekwong.mailmcpserver.send.MailSendRateLimiter;
 import uk.ekwong.mailmcpserver.send.MailSendRequestMapper;
 import uk.ekwong.mailmcpserver.send.MailSendService;
 import uk.ekwong.mailmcpserver.send.OriginalEmailContentParser;
@@ -54,23 +56,50 @@ class MailSendToolsTest {
     private final ObjectStorageService storage = mock(ObjectStorageService.class);
     private final CapturingMailTransport transport = new CapturingMailTransport();
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final MailSendProperties properties = new MailSendProperties();
 
     private MailSendTools tools;
 
     @BeforeEach
     void setUp() {
-        MailSendRequestMapper requestMapper = new MailSendRequestMapper(new MailSendProperties());
+        MailSendRequestMapper requestMapper = new MailSendRequestMapper(properties);
         tools =
                 new MailSendTools(
                         requestMapper,
                         new MailSendService(transport, new SimpleMeterRegistry()),
                         new MailCompositionService(
                                 requestMapper, storage, new OriginalEmailContentParser()),
+                        new MailSendRateLimiter(properties),
                         new McpToolObserver(
                                 new ObjectMapper()
                                         .registerModule(new JavaTimeModule())
                                         .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS),
                                 meterRegistry));
+    }
+
+    @Test
+    void limitsToolCallsPerSession() {
+        properties.getRateLimit().setRequestsPerMinute(1);
+        McpSyncServerExchange session = mock(McpSyncServerExchange.class);
+        when(session.sessionId()).thenReturn("session-1");
+        Map<String, Object> arguments =
+                Map.of(
+                        "smtpHost", "smtp.example.com",
+                        "smtpPort", 587,
+                        "smtpUsername", "alice@example.com",
+                        "smtpPassword", "secret",
+                        "to", List.of("bob@example.com"),
+                        "subject", "Subject");
+
+        assertThat(callTool(0, "send_mail", arguments, session).isError()).isFalse();
+
+        McpSchema.CallToolResult limited = callTool(0, "send_mail", arguments, session);
+        assertThat(limited.isError()).isTrue();
+        assertThat(text(limited)).contains("Too many mail tool calls");
+
+        McpSyncServerExchange other = mock(McpSyncServerExchange.class);
+        when(other.sessionId()).thenReturn("session-2");
+        assertThat(callTool(0, "send_mail", arguments, other).isError()).isFalse();
     }
 
     @Test
@@ -349,8 +378,13 @@ class MailSendToolsTest {
 
     private McpSchema.CallToolResult callTool(
             int index, String name, Map<String, Object> arguments) {
+        return callTool(index, name, arguments, null);
+    }
+
+    private McpSchema.CallToolResult callTool(
+            int index, String name, Map<String, Object> arguments, McpSyncServerExchange exchange) {
         McpServerFeatures.SyncToolSpecification spec = tools.toolSpecifications().get(index);
-        return spec.callHandler().apply(null, new McpSchema.CallToolRequest(name, arguments));
+        return spec.callHandler().apply(exchange, new McpSchema.CallToolRequest(name, arguments));
     }
 
     private String text(McpSchema.CallToolResult result) {

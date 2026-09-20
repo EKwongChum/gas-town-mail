@@ -17,6 +17,7 @@
 package uk.ekwong.mailmcpserver.mcp;
 
 import io.modelcontextprotocol.server.McpServerFeatures;
+import io.modelcontextprotocol.server.McpSyncServerExchange;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -29,6 +30,7 @@ import uk.ekwong.mailmcpserver.send.MailCompositionService;
 import uk.ekwong.mailmcpserver.send.MailForwardRequest;
 import uk.ekwong.mailmcpserver.send.MailReplyRequest;
 import uk.ekwong.mailmcpserver.send.MailSendFailedException;
+import uk.ekwong.mailmcpserver.send.MailSendRateLimiter;
 import uk.ekwong.mailmcpserver.send.MailSendRequest;
 import uk.ekwong.mailmcpserver.send.MailSendRequestMapper;
 import uk.ekwong.mailmcpserver.send.MailSendService;
@@ -54,16 +56,19 @@ public class MailSendTools {
     private final MailSendRequestMapper requestMapper;
     private final MailSendService sendService;
     private final MailCompositionService compositionService;
+    private final MailSendRateLimiter rateLimiter;
     private final McpToolObserver observer;
 
     public MailSendTools(
             MailSendRequestMapper requestMapper,
             MailSendService sendService,
             MailCompositionService compositionService,
+            MailSendRateLimiter rateLimiter,
             McpToolObserver observer) {
         this.requestMapper = requestMapper;
         this.sendService = sendService;
         this.compositionService = compositionService;
+        this.rateLimiter = rateLimiter;
         this.observer = observer;
     }
 
@@ -93,7 +98,8 @@ public class MailSendTools {
                 .tool(tool)
                 .callHandler(
                         (exchange, request) ->
-                                observer.observed("send_mail", () -> send(request.arguments())))
+                                observer.observed(
+                                        "send_mail", () -> send(exchange, request.arguments())))
                 .build();
     }
 
@@ -120,7 +126,8 @@ public class MailSendTools {
                 .tool(tool)
                 .callHandler(
                         (exchange, request) ->
-                                observer.observed("reply_mail", () -> reply(request.arguments())))
+                                observer.observed(
+                                        "reply_mail", () -> reply(exchange, request.arguments())))
                 .build();
     }
 
@@ -145,11 +152,17 @@ public class MailSendTools {
                 .callHandler(
                         (exchange, request) ->
                                 observer.observed(
-                                        "forward_mail", () -> forward(request.arguments())))
+                                        "forward_mail",
+                                        () -> forward(exchange, request.arguments())))
                 .build();
     }
 
-    private McpSchema.CallToolResult send(Map<String, Object> arguments) {
+    private McpSchema.CallToolResult send(
+            McpSyncServerExchange exchange, Map<String, Object> arguments) {
+        McpSchema.CallToolResult limited = rateLimited(exchange);
+        if (limited != null) {
+            return limited;
+        }
         try {
             return observer.ok(sendService.send(requestMapper.toCommand(toSendRequest(arguments))));
         } catch (IllegalArgumentException | MailSendFailedException | IllegalStateException e) {
@@ -157,7 +170,12 @@ public class MailSendTools {
         }
     }
 
-    private McpSchema.CallToolResult reply(Map<String, Object> arguments) {
+    private McpSchema.CallToolResult reply(
+            McpSyncServerExchange exchange, Map<String, Object> arguments) {
+        McpSchema.CallToolResult limited = rateLimited(exchange);
+        if (limited != null) {
+            return limited;
+        }
         try {
             return observer.ok(
                     sendService.send(compositionService.composeReply(toReplyRequest(arguments))));
@@ -169,7 +187,12 @@ public class MailSendTools {
         }
     }
 
-    private McpSchema.CallToolResult forward(Map<String, Object> arguments) {
+    private McpSchema.CallToolResult forward(
+            McpSyncServerExchange exchange, Map<String, Object> arguments) {
+        McpSchema.CallToolResult limited = rateLimited(exchange);
+        if (limited != null) {
+            return limited;
+        }
         try {
             return observer.ok(
                     sendService.send(
@@ -342,5 +365,22 @@ public class MailSendTools {
                             McpToolSchemas.string(entry, "contentBase64")));
         }
         return attachments;
+    }
+
+    /**
+     * Applies {@code app.send.rate-limit.requests-per-minute} to the sending tools, keyed by the
+     * MCP session because tool calls do not expose a client address.
+     *
+     * @return an error result when the limit is reached, {@code null} when the call may proceed
+     */
+    private McpSchema.CallToolResult rateLimited(McpSyncServerExchange exchange) {
+        String session = exchange == null ? null : exchange.sessionId();
+        MailSendRateLimiter.Decision decision =
+                rateLimiter.acquire("mcp:" + (session == null ? "anonymous" : session));
+        if (decision.allowed()) {
+            return null;
+        }
+        return observer.error(
+                "Too many mail tool calls, retry in " + decision.retryAfterSeconds() + " seconds");
     }
 }

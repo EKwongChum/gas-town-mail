@@ -115,9 +115,13 @@ class SmtpMailTransportTest {
     @Test
     void failsWhenTheSmtpServerIsUnreachable() throws Exception {
         int port = freePort();
+        // short timeouts keep the test fast even if something answers on that port
+        MailSendProperties properties = new MailSendProperties();
+        properties.setConnectTimeout(Duration.ofMillis(500));
+        properties.setReadTimeout(Duration.ofMillis(500));
+        properties.setWriteTimeout(Duration.ofMillis(500));
         MailSendService service =
-                new MailSendService(
-                        new SmtpMailTransport(new MailSendProperties()), new SimpleMeterRegistry());
+                new MailSendService(new SmtpMailTransport(properties), new SimpleMeterRegistry());
         MailSendCommand command =
                 new MailSendCommand(
                         new SmtpSettings("127.0.0.1", port, null, null, null),

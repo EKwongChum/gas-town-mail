@@ -44,6 +44,10 @@ mail-mcp-server 的发信链路在 MCP 工具指标之外还提供以下 Microme
 | `mail.send.attachments` | counter | — | 成功投递邮件携带的附件个数 |
 | `mail.send.attachment.bytes` | counter | — | 成功投递邮件携带的附件字节数 |
 | `mail.mcp.tool.calls` / `mail.mcp.tool.duration` | counter / timer | `tool`、`outcome` | MCP 工具调用（含 `send_mail` / `reply_mail` / `forward_mail`） |
+
+后台投递（`Prefer: respond-async`）使用 `app.send.async.threads` / `queue-capacity` 限定的线程池，
+队列满时请求返回 `429`；任务状态保留 `app.send.async.task-ttl`，可用
+`GET /api/mails/tasks/{id}` 查询。幂等键与任务状态都保存在内存中，多实例部署时只对同一实例有效。
 - 默认端口 `2525` 无需 root；生产环境请按需改为 `25` 并配置 TLS、鉴权和网络白名单。
 - 本机已有 S3 兼容服务时，应用会直接使用其 endpoint；否则请先启动 MinIO。
 

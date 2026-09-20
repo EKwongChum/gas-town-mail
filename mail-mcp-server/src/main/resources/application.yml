@@ -58,6 +58,14 @@ app:
       requests-per-minute: ${MAIL_SEND_RATE_LIMIT_PER_MINUTE:0}
       # Use the first X-Forwarded-For entry when running behind a reverse proxy
       trust-forwarded-for: ${MAIL_SEND_TRUST_FORWARDED_FOR:false}
+    # Idempotency-Key of a request is remembered for this long (0 disables the check)
+    idempotency-ttl: ${MAIL_SEND_IDEMPOTENCY_TTL:15m}
+    async:
+      # Allow 'Prefer: respond-async' (202 plus GET /api/mails/tasks/{id})
+      enabled: ${MAIL_SEND_ASYNC_ENABLED:true}
+      threads: ${MAIL_SEND_ASYNC_THREADS:2}
+      queue-capacity: ${MAIL_SEND_ASYNC_QUEUE_CAPACITY:50}
+      task-ttl: ${MAIL_SEND_ASYNC_TASK_TTL:15m}
   security:
     # Shared secret required on protected-paths; blank keeps the endpoints open (dev default)
     api-key: ${APP_SECURITY_API_KEY:}

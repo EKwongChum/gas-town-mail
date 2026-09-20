@@ -22,6 +22,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
@@ -44,7 +45,11 @@ import uk.ekwong.mailmcpserver.send.MailSendRateLimiter;
 public class MailSendRateLimitFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(MailSendRateLimitFilter.class);
-    private static final String MAIL_PATH_PREFIX = "/api/mails/";
+
+    /** Only the delivery endpoints are limited; polling a delivery task must not consume quota. */
+    private static final List<String> LIMITED_PATHS =
+            List.of("/api/mails/send", "/api/mails/reply", "/api/mails/forward");
+
     private static final String FORWARDED_FOR = "X-Forwarded-For";
 
     private final MailSendProperties properties;
@@ -57,7 +62,7 @@ public class MailSendRateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !rateLimiter.enabled() || !RequestPath.of(request).startsWith(MAIL_PATH_PREFIX);
+        return !rateLimiter.enabled() || !LIMITED_PATHS.contains(RequestPath.of(request));
     }
 
     @Override

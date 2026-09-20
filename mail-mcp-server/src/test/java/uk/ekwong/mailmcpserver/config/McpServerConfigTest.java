@@ -31,6 +31,7 @@ import uk.ekwong.mailmcpserver.mcp.MailSendTools;
 import uk.ekwong.mailmcpserver.mcp.McpToolObserver;
 import uk.ekwong.mailmcpserver.send.MailCompositionService;
 import uk.ekwong.mailmcpserver.send.MailSendProperties;
+import uk.ekwong.mailmcpserver.send.MailSendRateLimiter;
 import uk.ekwong.mailmcpserver.send.MailSendRequestMapper;
 import uk.ekwong.mailmcpserver.send.MailSendService;
 import uk.ekwong.mailmcpserver.service.EmailQueryService;
@@ -58,6 +59,7 @@ class McpServerConfigTest {
                         new MailSendRequestMapper(new MailSendProperties()),
                         mock(MailSendService.class),
                         mock(MailCompositionService.class),
+                        new MailSendRateLimiter(new MailSendProperties()),
                         observer);
         McpSyncServer server = config.mcpSyncServer(transport, queryTools, sendTools);
         try {

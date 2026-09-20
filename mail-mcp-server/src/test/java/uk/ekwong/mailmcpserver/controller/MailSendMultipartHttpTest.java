@@ -54,6 +54,7 @@ import org.subethamail.smtp.MessageHandler;
 import org.subethamail.smtp.MessageHandlerFactory;
 import org.subethamail.smtp.server.SMTPServer;
 import uk.ekwong.mailmcpserver.send.MailSendResponse;
+import uk.ekwong.mailmcpserver.send.MailSendTask;
 
 /**
  * End-to-end test over a real servlet container: the multipart request is parsed by the servlet
@@ -205,6 +206,46 @@ class MailSendMultipartHttpTest {
                 .contains("forward_mail");
     }
 
+    @Test
+    void deliversAnUploadedAttachmentInTheBackground() throws Exception {
+        byte[] uploaded = "async-attachment".getBytes(StandardCharsets.UTF_8);
+        MultiValueMap<String, Object> body =
+                multipartBody(
+                        requestBody(),
+                        new ByteArrayResource(uploaded) {
+                            @Override
+                            public String getFilename() {
+                                return "async.txt";
+                            }
+                        });
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        headers.set("Prefer", "respond-async");
+
+        ResponseEntity<String> accepted =
+                restTemplate.postForEntity(
+                        "/api/mails/send", new HttpEntity<>(body, headers), String.class);
+        assertThat(accepted.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        String taskId = objectMapper.readTree(accepted.getBody()).get("taskId").asText();
+
+        MailSendTask task = awaitTask(taskId);
+        assertThat(task.status()).isEqualTo(MailSendTask.Status.SUCCEEDED);
+        assertThat(task.response().attachmentCount()).isEqualTo(1);
+        assertThat(task.response().attachmentBytes()).isEqualTo(uploaded.length);
+    }
+
+    private MailSendTask awaitTask(String taskId) throws Exception {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            MailSendTask task =
+                    restTemplate.getForObject("/api/mails/tasks/" + taskId, MailSendTask.class);
+            if (task.status() != MailSendTask.Status.PENDING) {
+                return task;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("delivery task " + taskId + " did not finish in time");
+    }
+
     private HttpHeaders mcpHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -275,7 +316,9 @@ class MailSendMultipartHttpTest {
             assertThat(received.await(TIMEOUT.toSeconds(), TimeUnit.SECONDS))
                     .as("SMTP server received a message")
                     .isTrue();
-            return messages.get(0);
+            // the server is shared by the tests of this class: the newest message is the one the
+            // current test just asked for
+            return messages.get(messages.size() - 1);
         }
 
         private final class HandlerFactory implements MessageHandlerFactory {
