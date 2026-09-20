@@ -140,7 +140,7 @@ class MailCompositionServiceTest {
 
         assertThat(command.body()).isEqualTo("Thanks");
         assertThat(command.attachments()).hasSize(1);
-        assertThat(command.attachments().get(0).content())
+        assertThat(TestAttachments.bytes(command.attachments().get(0)))
                 .isEqualTo(TestOriginalEmails.ATTACHMENT_BYTES);
     }
 

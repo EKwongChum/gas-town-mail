@@ -16,7 +16,9 @@
 
 package uk.ekwong.mailmcpserver.send;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.activation.DataHandler;
+import jakarta.activation.DataSource;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
 import jakarta.mail.Part;
@@ -25,9 +27,12 @@ import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
 import jakarta.mail.internet.MimeUtility;
-import jakarta.mail.util.ByteArrayDataSource;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
@@ -48,9 +53,11 @@ public class MailSendService {
     private static final Logger log = LoggerFactory.getLogger(MailSendService.class);
 
     private final MailTransport transport;
+    private final MeterRegistry meterRegistry;
 
-    public MailSendService(MailTransport transport) {
+    public MailSendService(MailTransport transport, MeterRegistry meterRegistry) {
         this.transport = transport;
+        this.meterRegistry = meterRegistry;
     }
 
     /**
@@ -59,18 +66,22 @@ public class MailSendService {
      * @throws IllegalArgumentException when the command has no recipient
      * @throws MailSendFailedException when the SMTP server rejected the mail or could not be
      *     reached
+     * @throws IllegalStateException when the MIME message itself cannot be built
      */
     public MailSendResponse send(MailSendCommand command) {
         if (command.to().isEmpty()) {
             throw new IllegalArgumentException("to must not be empty");
         }
+        long startedNanos = System.nanoTime();
         MimeMessage message = build(command);
         try {
             transport.send(command, message);
         } catch (MessagingException e) {
+            record("failure", startedNanos, command);
             throw new MailSendFailedException(
                     "SMTP send via " + command.smtp() + " failed: " + e.getMessage(), e);
         }
+        record("success", startedNanos, command);
         log.info(
                 "Sent mail via {} to={} cc={} attachments={} attachmentBytes={}",
                 command.smtp(),
@@ -111,10 +122,24 @@ public class MailSendService {
             // command instead of generating its own.
             message.saveChanges();
         } catch (MessagingException e) {
-            throw new MailSendFailedException(
+            // building the message is our own failure, not an error of the SMTP server
+            throw new IllegalStateException(
                     "Could not build the MIME message: " + e.getMessage(), e);
         }
         return message;
+    }
+
+    private void record(String outcome, long startedNanos, MailSendCommand command) {
+        meterRegistry.counter("mail.send.attempts", "outcome", outcome).increment();
+        meterRegistry
+                .timer("mail.send.duration", "outcome", outcome)
+                .record(Duration.ofNanos(System.nanoTime() - startedNanos));
+        if ("success".equals(outcome)) {
+            meterRegistry.counter("mail.send.attachments").increment(command.attachments().size());
+            meterRegistry
+                    .counter("mail.send.attachment.bytes")
+                    .increment(command.attachmentBytes());
+        }
     }
 
     private void setContent(MimeMessage message, MailSendCommand command)
@@ -136,9 +161,7 @@ public class MailSendService {
 
     private MimeBodyPart attachmentPart(MailAttachment attachment) throws MessagingException {
         MimeBodyPart part = new MimeBodyPart();
-        part.setDataHandler(
-                new DataHandler(
-                        new ByteArrayDataSource(attachment.content(), attachment.contentType())));
+        part.setDataHandler(new DataHandler(new AttachmentDataSource(attachment)));
         try {
             part.setFileName(
                     MimeUtility.encodeText(
@@ -148,6 +171,33 @@ public class MailSendService {
         }
         part.setDisposition(Part.ATTACHMENT);
         return part;
+    }
+
+    /**
+     * Reads the attachment from its source while the message is written, so a large uploaded file
+     * is not buffered in memory a second time.
+     */
+    private record AttachmentDataSource(MailAttachment attachment) implements DataSource {
+
+        @Override
+        public InputStream getInputStream() throws IOException {
+            return attachment.content().open();
+        }
+
+        @Override
+        public OutputStream getOutputStream() throws IOException {
+            throw new IOException("attachments are read-only");
+        }
+
+        @Override
+        public String getContentType() {
+            return attachment.contentType();
+        }
+
+        @Override
+        public String getName() {
+            return attachment.filename();
+        }
     }
 
     private InternetAddress[] toAddresses(List<String> addresses) throws MessagingException {

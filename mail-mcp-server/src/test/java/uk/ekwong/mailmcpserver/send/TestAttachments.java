@@ -16,13 +16,24 @@
 
 package uk.ekwong.mailmcpserver.send;
 
-/**
- * Thrown when the SMTP server rejected the mail or could not be reached (mapped to HTTP {@code 502}
- * by the controller advice).
- */
-public class MailSendFailedException extends RuntimeException {
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 
-    public MailSendFailedException(String message, Throwable cause) {
-        super(message, cause);
+/** Reads the streamed content of an attachment for assertions. */
+final class TestAttachments {
+
+    private TestAttachments() {}
+
+    static byte[] bytes(MailAttachment attachment) {
+        try (var in = attachment.content().open()) {
+            return in.readAllBytes();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    static String text(MailAttachment attachment) {
+        return new String(bytes(attachment), StandardCharsets.UTF_8);
     }
 }

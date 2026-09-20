@@ -83,8 +83,9 @@ public class MailSendExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
                 .body(
                         new ApiError(
-                                "Unsupported request content type; use application/json or "
-                                        + "multipart/form-data"));
+                                "Unsupported request content type: use application/json, or "
+                                        + "multipart/form-data whose 'request' part is "
+                                        + "application/json"));
     }
 
     @ExceptionHandler(OriginalMailNotFoundException.class)

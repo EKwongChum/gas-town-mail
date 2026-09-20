@@ -309,7 +309,7 @@ public class OriginalEmailContentParser {
 
         void attachment(String filename, Part part) throws MessagingException, IOException {
             try (InputStream in = part.getInputStream()) {
-                attachments.add(new MailAttachment(filename, contentType(part), in.readAllBytes()));
+                attachments.add(MailAttachment.of(filename, contentType(part), in.readAllBytes()));
             }
         }
 

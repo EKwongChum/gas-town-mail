@@ -33,6 +33,8 @@
   回传；同一请求内的日志会带上 `traceId` MDC 字段，用于把一次 `tools/call` 的请求、日志和下游错误串起来。
 - 每次 MCP 工具调用会输出一条汇总日志（tool、outcome、durationMs），并记录 Micrometer 指标
   `mail.mcp.tool.calls`（按 `tool` / `outcome` 标签）与 `mail.mcp.tool.duration`（按 `tool` 标签）。
+- HTTP 发信链路另外记录 `mail.send.attempts`（`outcome=success|failure`）、`mail.send.duration`、
+  `mail.send.attachments` 与 `mail.send.attachment.bytes`，便于监控投递成功率与附件流量。
 - 本地默认输出可读文本日志；以 `json` profile 启动（compose 默认已开启）会输出 Logstash 格式的
   JSON 日志，MDC 中的 `traceId` 等字段会作为结构化字段进入每一行。
 

@@ -46,7 +46,8 @@ class OriginalEmailContentParserTest {
         MailAttachment attachment = parser.readAttachments(raw).get(0);
         assertThat(attachment.filename()).isEqualTo("report.pdf");
         assertThat(attachment.contentType()).isEqualTo("application/pdf");
-        assertThat(attachment.content()).isEqualTo(TestOriginalEmails.ATTACHMENT_BYTES);
+        assertThat(TestAttachments.bytes(attachment))
+                .isEqualTo(TestOriginalEmails.ATTACHMENT_BYTES);
     }
 
     @Test

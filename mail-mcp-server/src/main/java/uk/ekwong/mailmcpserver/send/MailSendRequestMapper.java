@@ -17,7 +17,6 @@
 package uk.ekwong.mailmcpserver.send;
 
 import jakarta.annotation.PostConstruct;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -147,7 +146,10 @@ public class MailSendRequestMapper {
             if (file.getSize() > properties.getMaxAttachmentSize().toBytes()) {
                 throw attachmentTooLarge(filename, file.getSize());
             }
-            attachments.add(new MailAttachment(filename, contentTypeOf(file), read(file)));
+            // streamed from the temporary file of the servlet container when the mail is written
+            attachments.add(
+                    new MailAttachment(
+                            filename, contentTypeOf(file), file.getSize(), file::getInputStream));
         }
         validateAttachmentLimits(attachments);
         return attachments;
@@ -300,7 +302,7 @@ public class MailSendRequestMapper {
                     StringUtils.hasText(request.contentType())
                             ? request.contentType().trim()
                             : DEFAULT_CONTENT_TYPE;
-            attachments.add(new MailAttachment(filename, contentType, content));
+            attachments.add(MailAttachment.of(filename, contentType, content));
         }
         return attachments;
     }
@@ -309,16 +311,6 @@ public class MailSendRequestMapper {
         return StringUtils.hasText(file.getContentType())
                 ? file.getContentType().trim()
                 : DEFAULT_CONTENT_TYPE;
-    }
-
-    private byte[] read(MultipartFile file) {
-        try {
-            return file.getBytes();
-        } catch (IOException e) {
-            throw new IllegalStateException(
-                    "could not read the uploaded attachment '" + file.getOriginalFilename() + "'",
-                    e);
-        }
     }
 
     /**

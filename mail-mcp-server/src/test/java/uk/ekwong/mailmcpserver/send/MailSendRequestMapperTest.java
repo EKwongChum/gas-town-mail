@@ -135,8 +135,7 @@ class MailSendRequestMapperTest {
         assertThat(command.attachments()).hasSize(2);
         assertThat(command.attachments().get(0).filename()).isEqualTo("report.pdf");
         assertThat(command.attachments().get(0).contentType()).isEqualTo("application/pdf");
-        assertThat(new String(command.attachments().get(0).content(), StandardCharsets.UTF_8))
-                .isEqualTo("pdf-bytes");
+        assertThat(TestAttachments.text(command.attachments().get(0))).isEqualTo("pdf-bytes");
         assertThat(command.attachments().get(1).contentType())
                 .isEqualTo("application/octet-stream");
         assertThat(command.attachmentBytes()).isEqualTo(14);
@@ -368,8 +367,7 @@ class MailSendRequestMapperTest {
         assertThat(command.attachments()).hasSize(2);
         assertThat(command.attachments().get(0).filename()).isEqualTo("report.pdf");
         assertThat(command.attachments().get(0).contentType()).isEqualTo("application/pdf");
-        assertThat(new String(command.attachments().get(0).content(), StandardCharsets.UTF_8))
-                .isEqualTo("pdf-bytes");
+        assertThat(TestAttachments.text(command.attachments().get(0))).isEqualTo("pdf-bytes");
         assertThat(command.attachments().get(1).contentType())
                 .isEqualTo("application/octet-stream");
         assertThat(command.attachmentBytes()).isEqualTo(14);

@@ -26,6 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.mail.MessagingException;
 import jakarta.mail.Multipart;
 import jakarta.mail.internet.MimeMessage;
@@ -71,7 +72,7 @@ class MailSendControllerTest {
         mockMvc =
                 MockMvcBuilders.standaloneSetup(
                                 new MailSendController(
-                                        new MailSendService(transport),
+                                        new MailSendService(transport, new SimpleMeterRegistry()),
                                         requestMapper,
                                         new MailCompositionService(
                                                 requestMapper,

@@ -63,7 +63,7 @@ class MailSendToolsTest {
         tools =
                 new MailSendTools(
                         requestMapper,
-                        new MailSendService(transport),
+                        new MailSendService(transport, new SimpleMeterRegistry()),
                         new MailCompositionService(
                                 requestMapper, storage, new OriginalEmailContentParser()),
                         new McpToolObserver(

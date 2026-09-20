@@ -18,6 +18,14 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`app.send.verify-server-identity`), credentials are refused on unencrypted connections unless
   `app.send.allow-plaintext-credentials` is switched on, and the envelope sender (SMTP `MAIL FROM`)
   defaults to the authenticated SMTP account instead of the From header.
+- Outbound mail metrics: `mail.send.attempts` (outcome), `mail.send.duration`,
+  `mail.send.attachments` and `mail.send.attachment.bytes`.
+- Attachments are streamed from their source when the message is written (a multipart upload is
+  read from the servlet container temporary file), and archived attachments are only read when a
+  forward actually carries them over.
+- The OpenAPI documentation of the mail endpoints now describes the JSON and multipart variants in
+  one coherent operation, and the `415` response explains that a multipart `request` part must be
+  `application/json`.
 
 - Outbound mail endpoints on mail-mcp-server: `POST /api/mails/send` sends a mail through an SMTP
   server supplied in the request (host, port, account, password, subject, body, recipients and

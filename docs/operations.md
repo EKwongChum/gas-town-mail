@@ -32,6 +32,18 @@ mail-mcp-server `8082`，路径均为 `GET /actuator/health`。
   发信能力的三层保护（`app.security.api-key`、`app.send.allowed-smtp-hosts`、
   `app.send.rate-limit.*`）与 TLS 相关开关见[邮件发送](mail-sending.md)的「鉴权、白名单与限流」
   与「传输安全与投递身份」；未配置时启动日志会给出 WARN 提醒。
+
+## 发信指标
+
+mail-mcp-server 的发信链路在 MCP 工具指标之外还提供以下 Micrometer 指标（`/actuator/prometheus`）：
+
+| 指标 | 类型 | 标签 | 说明 |
+| --- | --- | --- | --- |
+| `mail.send.attempts` | counter | `outcome=success\|failure` | 每次投递尝试数（`failure` 含 SMTP 不可达/被拒收） |
+| `mail.send.duration` | timer | `outcome` | 投递耗时（含 SMTP 握手与传输） |
+| `mail.send.attachments` | counter | — | 成功投递邮件携带的附件个数 |
+| `mail.send.attachment.bytes` | counter | — | 成功投递邮件携带的附件字节数 |
+| `mail.mcp.tool.calls` / `mail.mcp.tool.duration` | counter / timer | `tool`、`outcome` | MCP 工具调用（含 `send_mail` / `reply_mail` / `forward_mail`） |
 - 默认端口 `2525` 无需 root；生产环境请按需改为 `25` 并配置 TLS、鉴权和网络白名单。
 - 本机已有 S3 兼容服务时，应用会直接使用其 endpoint；否则请先启动 MinIO。
 

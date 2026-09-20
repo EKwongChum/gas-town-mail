@@ -17,15 +17,21 @@
 package uk.ekwong.mailmcpserver.send;
 
 /**
- * A decoded attachment that is written into the outgoing MIME message.
+ * An attachment of an outgoing mail. The content is streamed from its source while the mail is
+ * written, so only the size is held in memory.
  *
  * @param filename file name as it should appear in the mail client
  * @param contentType MIME content type, e.g. {@code application/pdf}
- * @param content raw attachment bytes
+ * @param size size of the content in bytes
+ * @param content source of the attachment bytes, opened once per read
  */
-public record MailAttachment(String filename, String contentType, byte[] content) {
+public record MailAttachment(
+        String filename, String contentType, long size, AttachmentContent content) {
 
-    public int size() {
-        return content == null ? 0 : content.length;
+    /** Creates an attachment whose content is already in memory. */
+    public static MailAttachment of(String filename, String contentType, byte[] content) {
+        byte[] bytes = content == null ? new byte[0] : content;
+        return new MailAttachment(
+                filename, contentType, bytes.length, AttachmentContent.ofBytes(bytes));
     }
 }

@@ -63,12 +63,37 @@ import uk.ekwong.mailmcpserver.send.MailSendService;
                         + "archived mail by its archive id")
 public class MailSendController {
 
-    private static final String MULTIPART_DESCRIPTION =
-            "Multipart form: the 'request' part is the JSON body documented below "
-                    + "(Content-Type: application/json) and each attachment is uploaded as an "
-                    + "'attachments' file part. Uploaded files are limited by "
-                    + "app.send.max-attachment-size / max-total-attachment-size and by "
-                    + "spring.servlet.multipart.max-file-size / max-request-size.";
+    /**
+     * Every endpoint accepts both content types, so both mappings of a path carry the same
+     * documentation: springdoc merges them into a single OpenAPI operation.
+     */
+    private static final String CONTENT_TYPE_NOTE =
+            " Accepts application/json with Base64 attachments (at most 10 MB each and 20 MB in "
+                    + "total) or multipart/form-data, where the 'request' part carries the same JSON "
+                    + "body (Content-Type: application/json) and every attachment is uploaded as its "
+                    + "own 'attachments' file part.";
+
+    private static final String SEND_DESCRIPTION =
+            "Sends one mail through the SMTP server given in the request body."
+                    + CONTENT_TYPE_NOTE
+                    + " The response contains the generated Message-ID and the envelope sender that "
+                    + "was used.";
+
+    private static final String REPLY_DESCRIPTION =
+            "Sends a reply to the archived mail with the given archive id (the id returned by the "
+                    + "MCP tools search_mails / get_mail_by_id): the original Reply-To/From becomes "
+                    + "the recipient unless to is given, the subject is prefixed with Re:, the "
+                    + "original body is quoted and the reply keeps the original thread via "
+                    + "In-Reply-To/References."
+                    + CONTENT_TYPE_NOTE;
+
+    private static final String FORWARD_DESCRIPTION =
+            "Forwards the archived mail with the given archive id (the id returned by the MCP tools "
+                    + "search_mails / get_mail_by_id) to the recipients in the request: the subject "
+                    + "is prefixed with Fwd:, the original body is embedded in a forwarded-message "
+                    + "block and the original attachments are carried over unless "
+                    + "includeOriginalAttachments is false."
+                    + CONTENT_TYPE_NOTE;
 
     private final MailSendService sendService;
     private final MailSendRequestMapper requestMapper;
@@ -84,23 +109,13 @@ public class MailSendController {
     }
 
     @PostMapping("/send")
-    @Operation(
-            summary = "Send a mail",
-            description =
-                    "Sends one mail through the SMTP server given in the request body. "
-                            + "Attachments are Base64 encoded, each attachment may be at most "
-                            + "10 MB and all attachments together at most 20 MB. The response "
-                            + "contains the generated Message-ID.")
+    @Operation(operationId = "sendMail", summary = "Send a mail", description = SEND_DESCRIPTION)
     public MailSendResponse send(@RequestBody MailSendRequest request) {
         return sendService.send(requestMapper.toCommand(request));
     }
 
     @PostMapping(value = "/send", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(
-            summary = "Send a mail with uploaded attachments",
-            description =
-                    "Sends one mail with the attachments uploaded as multipart file parts. "
-                            + MULTIPART_DESCRIPTION)
+    @Operation(operationId = "sendMail", summary = "Send a mail", description = SEND_DESCRIPTION)
     public MailSendResponse sendMultipart(
             @RequestPart("request") MailSendRequest request,
             @RequestPart(value = "attachments", required = false) List<MultipartFile> attachments) {
@@ -109,24 +124,18 @@ public class MailSendController {
 
     @PostMapping("/reply")
     @Operation(
+            operationId = "replyMail",
             summary = "Reply to an archived mail",
-            description =
-                    "Sends a reply to the archived mail with the given archive id (the id "
-                            + "returned by the MCP tools search_mails / get_mail_by_id). The "
-                            + "original Reply-To/From becomes the recipient unless to is given, the "
-                            + "subject is prefixed with Re:, the original body is quoted and the "
-                            + "reply keeps the original thread via In-Reply-To/References.")
+            description = REPLY_DESCRIPTION)
     public MailSendResponse reply(@RequestBody MailReplyRequest request) {
         return sendService.send(compositionService.composeReply(request));
     }
 
     @PostMapping(value = "/reply", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
-            summary = "Reply to an archived mail with uploaded attachments",
-            description =
-                    "Sends a reply to the archived mail with the given archive id, with the "
-                            + "attachments uploaded as multipart file parts. "
-                            + MULTIPART_DESCRIPTION)
+            operationId = "replyMail",
+            summary = "Reply to an archived mail",
+            description = REPLY_DESCRIPTION)
     public MailSendResponse replyMultipart(
             @RequestPart("request") MailReplyRequest request,
             @RequestPart(value = "attachments", required = false) List<MultipartFile> attachments) {
@@ -137,24 +146,18 @@ public class MailSendController {
 
     @PostMapping("/forward")
     @Operation(
+            operationId = "forwardMail",
             summary = "Forward an archived mail",
-            description =
-                    "Forwards the archived mail with the given archive id (the id returned by the "
-                            + "MCP tools search_mails / get_mail_by_id) to the recipients in the "
-                            + "request. The subject is prefixed with Fwd:, the original body is "
-                            + "embedded in a forwarded-message block and the original attachments "
-                            + "are carried over unless includeOriginalAttachments is false.")
+            description = FORWARD_DESCRIPTION)
     public MailSendResponse forward(@RequestBody MailForwardRequest request) {
         return sendService.send(compositionService.composeForward(request));
     }
 
     @PostMapping(value = "/forward", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
-            summary = "Forward an archived mail with uploaded attachments",
-            description =
-                    "Forwards the archived mail with the given archive id, with the attachments "
-                            + "uploaded as multipart file parts. "
-                            + MULTIPART_DESCRIPTION)
+            operationId = "forwardMail",
+            summary = "Forward an archived mail",
+            description = FORWARD_DESCRIPTION)
     public MailSendResponse forwardMultipart(
             @RequestPart("request") MailForwardRequest request,
             @RequestPart(value = "attachments", required = false) List<MultipartFile> attachments) {

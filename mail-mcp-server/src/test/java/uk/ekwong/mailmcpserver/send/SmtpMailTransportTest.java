@@ -19,6 +19,7 @@ package uk.ekwong.mailmcpserver.send;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.mail.Address;
 import jakarta.mail.BodyPart;
 import jakarta.mail.Multipart;
@@ -55,7 +56,9 @@ class SmtpMailTransportTest {
         server.start();
         try {
             MailSendService service =
-                    new MailSendService(new SmtpMailTransport(new MailSendProperties()));
+                    new MailSendService(
+                            new SmtpMailTransport(new MailSendProperties()),
+                            new SimpleMeterRegistry());
             MailSendCommand command =
                     new MailSendCommand(
                             new SmtpSettings("127.0.0.1", server.port(), null, null, null),
@@ -66,7 +69,7 @@ class SmtpMailTransportTest {
                             "Hello Bob, see the attachment.",
                             false,
                             List.of(
-                                    new MailAttachment(
+                                    MailAttachment.of(
                                             "note.txt",
                                             "text/plain",
                                             "attachment-data".getBytes(StandardCharsets.UTF_8))),
@@ -113,7 +116,8 @@ class SmtpMailTransportTest {
     void failsWhenTheSmtpServerIsUnreachable() throws Exception {
         int port = freePort();
         MailSendService service =
-                new MailSendService(new SmtpMailTransport(new MailSendProperties()));
+                new MailSendService(
+                        new SmtpMailTransport(new MailSendProperties()), new SimpleMeterRegistry());
         MailSendCommand command =
                 new MailSendCommand(
                         new SmtpSettings("127.0.0.1", port, null, null, null),
@@ -147,7 +151,9 @@ class SmtpMailTransportTest {
         server.start();
         try {
             MailSendService service =
-                    new MailSendService(new SmtpMailTransport(new MailSendProperties()));
+                    new MailSendService(
+                            new SmtpMailTransport(new MailSendProperties()),
+                            new SimpleMeterRegistry());
             MailSendCommand command =
                     new MailSendCommand(
                             new SmtpSettings(

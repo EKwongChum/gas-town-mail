@@ -152,7 +152,7 @@ public class MailSendTools {
     private McpSchema.CallToolResult send(Map<String, Object> arguments) {
         try {
             return observer.ok(sendService.send(requestMapper.toCommand(toSendRequest(arguments))));
-        } catch (IllegalArgumentException | MailSendFailedException e) {
+        } catch (IllegalArgumentException | MailSendFailedException | IllegalStateException e) {
             return observer.error(e.getMessage());
         }
     }
@@ -163,7 +163,8 @@ public class MailSendTools {
                     sendService.send(compositionService.composeReply(toReplyRequest(arguments))));
         } catch (IllegalArgumentException
                 | MailSendFailedException
-                | OriginalMailNotFoundException e) {
+                | OriginalMailNotFoundException
+                | IllegalStateException e) {
             return observer.error(e.getMessage());
         }
     }
@@ -175,7 +176,8 @@ public class MailSendTools {
                             compositionService.composeForward(toForwardRequest(arguments))));
         } catch (IllegalArgumentException
                 | MailSendFailedException
-                | OriginalMailNotFoundException e) {
+                | OriginalMailNotFoundException
+                | IllegalStateException e) {
             return observer.error(e.getMessage());
         }
     }
@@ -282,7 +284,7 @@ public class MailSendTools {
                 McpToolSchemas.stringList(arguments, "to"),
                 McpToolSchemas.stringList(arguments, "cc"),
                 McpToolSchemas.string(arguments, "subject"),
-                McpToolSchemas.string(arguments, "content"),
+                McpToolSchemas.text(arguments, "content"),
                 McpToolSchemas.bool(arguments, "html"),
                 toAttachments(arguments));
     }
@@ -299,7 +301,7 @@ public class MailSendTools {
                 McpToolSchemas.stringList(arguments, "to"),
                 McpToolSchemas.stringList(arguments, "cc"),
                 McpToolSchemas.string(arguments, "subject"),
-                McpToolSchemas.string(arguments, "content"),
+                McpToolSchemas.text(arguments, "content"),
                 McpToolSchemas.bool(arguments, "html"),
                 toAttachments(arguments),
                 McpToolSchemas.bool(arguments, "replyAll"),
@@ -319,7 +321,7 @@ public class MailSendTools {
                 McpToolSchemas.stringList(arguments, "to"),
                 McpToolSchemas.stringList(arguments, "cc"),
                 McpToolSchemas.string(arguments, "subject"),
-                McpToolSchemas.string(arguments, "content"),
+                McpToolSchemas.text(arguments, "content"),
                 McpToolSchemas.bool(arguments, "html"),
                 toAttachments(arguments),
                 McpToolSchemas.bool(arguments, "includeOriginalBody"),

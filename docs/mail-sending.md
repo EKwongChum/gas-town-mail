@@ -205,6 +205,8 @@ curl -X POST http://localhost:8082/api/mails/forward \
 
 - 上传文件与 JSON 附件受同一套限制（`app.send.max-attachment-size` 10MB /
   `max-total-attachment-size` 20MB），超限返回 `400`；
+- multipart 上传的附件在写邮件时直接从容器临时文件流式读取（不会整体读进内存），
+  因此大附件不会带来双份内存占用；
 - 文件名只取最后一段（浏览器可能带上完整路径，会被去掉），名称中的控制字符会被移除，
   空文件（0 字节）返回 `400`；
 - multipart 模式下 `request` 分片里不要再写 `attachments`（Base64），否则返回 `400`

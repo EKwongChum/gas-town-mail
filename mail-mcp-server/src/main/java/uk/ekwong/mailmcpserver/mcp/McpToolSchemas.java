@@ -109,6 +109,18 @@ final class McpToolSchemas {
         return text.isEmpty() ? null : text;
     }
 
+    /**
+     * Returns a free text argument exactly as it was sent: mail bodies keep their leading and
+     * trailing white space, unlike the identifiers and addresses read with {@link #string}.
+     */
+    static String text(Map<String, Object> arguments, String key) {
+        if (arguments == null) {
+            return null;
+        }
+        Object value = arguments.get(key);
+        return value == null ? null : String.valueOf(value);
+    }
+
     /** Returns an integer argument, or {@code null} when it is absent or not a number. */
     static Integer integer(Map<String, Object> arguments, String key) {
         if (arguments == null) {

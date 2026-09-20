@@ -19,6 +19,7 @@ package uk.ekwong.mailmcpserver.send;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.mail.MessagingException;
 import jakarta.mail.Multipart;
 import jakarta.mail.Part;
@@ -32,7 +33,8 @@ import org.junit.jupiter.api.Test;
 class MailSendServiceTest {
 
     private final CapturingMailTransport transport = new CapturingMailTransport();
-    private final MailSendService service = new MailSendService(transport);
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final MailSendService service = new MailSendService(transport, meterRegistry);
 
     private SmtpSettings smtp;
 
@@ -86,7 +88,7 @@ class MailSendServiceTest {
     @Test
     void sendsAttachmentsAsSeparatePartsWithDecodedFileNames() throws Exception {
         MailAttachment attachment =
-                new MailAttachment(
+                MailAttachment.of(
                         "报表.pdf", "application/pdf", "pdf-bytes".getBytes(StandardCharsets.UTF_8));
 
         MailSendResponse response =
@@ -170,6 +172,55 @@ class MailSendServiceTest {
                 .isInstanceOf(MailSendFailedException.class)
                 .hasMessageContaining("smtp.example.com:587")
                 .hasMessageContaining("connection refused");
+    }
+
+    @Test
+    void recordsSendMetrics() throws Exception {
+        service.send(
+                command(
+                        "Subject",
+                        "Body",
+                        false,
+                        List.of(
+                                MailAttachment.of(
+                                        "note.txt",
+                                        "text/plain",
+                                        "hello".getBytes(StandardCharsets.UTF_8))),
+                        null,
+                        List.of()));
+        transport.failWith(new MessagingException("connection refused"));
+        assertThatThrownBy(
+                        () ->
+                                service.send(
+                                        command(
+                                                "Subject", "Body", false, List.of(), null,
+                                                List.of())))
+                .isInstanceOf(MailSendFailedException.class);
+
+        assertThat(
+                        meterRegistry
+                                .get("mail.send.attempts")
+                                .tag("outcome", "success")
+                                .counter()
+                                .count())
+                .isEqualTo(1.0);
+        assertThat(
+                        meterRegistry
+                                .get("mail.send.attempts")
+                                .tag("outcome", "failure")
+                                .counter()
+                                .count())
+                .isEqualTo(1.0);
+        assertThat(
+                        meterRegistry
+                                .get("mail.send.duration")
+                                .tag("outcome", "success")
+                                .timer()
+                                .count())
+                .isEqualTo(1L);
+        assertThat(meterRegistry.get("mail.send.attachments").counter().count()).isEqualTo(1.0);
+        assertThat(meterRegistry.get("mail.send.attachment.bytes").counter().count())
+                .isEqualTo(5.0);
     }
 
     private MailSendCommand command(
