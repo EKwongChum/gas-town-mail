@@ -76,6 +76,43 @@ subject / sender / from / to / messageId（至少命中一个）。
 
 返回：JSON 对象 `{"count": N}`。
 
+### 4. `send_mail` — 发送邮件
+
+通过工具参数中给出的 SMTP 服务器**真实投递**一封邮件（服务端不保存凭据）。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `smtpHost` / `smtpPort` | string / integer | 是 | SMTP 服务器地址与端口（25 / 465 / 587 等） |
+| `smtpUsername` / `smtpPassword` | string | 否 / 条件 | SMTP 账号与密码；不填用户名表示服务器不做认证，填了用户名则密码必填 |
+| `smtpEncryption` | string | 否 | `none` / `starttls` / `ssl`；缺省时 465 用隐式 TLS，其他端口尝试 STARTTLS |
+| `from` | string | 否 | 发件人（可带显示名），缺省用 `smtpUsername` |
+| `to` / `cc` | array&lt;string&gt; | 是 / 否 | 收件人与抄送；也接受逗号分隔的单个字符串 |
+| `subject` / `content` | string | 否 | 主题与正文（UTF-8） |
+| `html` | boolean | 否 | 正文是否为 HTML，默认 `false` |
+| `attachments` | array&lt;object&gt; | 否 | `{filename, contentType, contentBase64}`，单个 ≤10 MB、合计 ≤20 MB |
+
+返回：JSON 对象，含 `messageId`、`from`、`to`、`cc`、`subject`、`attachmentCount`、
+`attachmentBytes`、`sentAt`；失败时返回 `isError=true` 的错误文本（参数非法、SMTP 不可达/被拒收）。
+
+### 5. `reply_mail` — 回复归档邮件
+
+参数 = `id`（`search_mails` / `get_mail_by_id` 返回的归档 id）+ 上述发送参数，另可选：
+
+| 参数 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `replyAll` | boolean | `false` | 同时抄送原邮件 To/Cc（排除本人） |
+| `includeOriginalBody` | boolean | `true` | 是否引用原邮件正文 |
+| `includeOriginalAttachments` | boolean | `false` | 是否携带原邮件附件 |
+
+未传 `to` 时发给原邮件 `Reply-To`（缺省 `From`），未传 `subject` 时加 `Re:` 前缀，
+并设置 `In-Reply-To` / `References` 保持原会话。
+
+### 6. `forward_mail` — 转发归档邮件
+
+参数 = `id` + 上述发送参数（`to` 必填），另可选 `includeOriginalBody`（默认 `true`）与
+`includeOriginalAttachments`（默认 `true`）。未传 `subject` 时加 `Fwd:` 前缀，正文嵌入转发块，
+原附件默认一并发出且与原附件一起受附件体积限制。
+
 ## 三、MCP 客户端接入
 
 ### 通用配置（Claude Desktop / Cursor / 其他 MCP 客户端）
@@ -142,6 +179,31 @@ curl -X POST http://localhost:8082/mcp \
         "receivedTimeGe": "2026-08-01T00:00:00Z",
         "page": 0,
         "size": 10
+      }
+    }
+  }'
+```
+
+调用 `send_mail`（真实投递，请谨慎）：
+
+```bash
+curl -X POST http://localhost:8082/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "tools/call",
+    "params": {
+      "name": "send_mail",
+      "arguments": {
+        "smtpHost": "smtp.example.com",
+        "smtpPort": 587,
+        "smtpUsername": "alice@example.com",
+        "smtpPassword": "secret",
+        "to": ["bob@example.com"],
+        "subject": "Hello",
+        "content": "Sent through the MCP tool"
       }
     }
   }'

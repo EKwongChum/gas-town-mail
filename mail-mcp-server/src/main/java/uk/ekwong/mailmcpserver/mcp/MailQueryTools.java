@@ -16,20 +16,11 @@
 
 package uk.ekwong.mailmcpserver.mcp;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.micrometer.core.instrument.MeterRegistry;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Supplier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import uk.ekwong.mailcommon.es.MailInfoDocument;
 import uk.ekwong.mailmcpserver.service.EmailQueryService;
@@ -42,20 +33,12 @@ import uk.ekwong.mailmcpserver.service.MailSearchRequest;
 @Component
 public class MailQueryTools {
 
-    private static final String TYPE_STRING = "string";
-    private static final Logger log = LoggerFactory.getLogger(MailQueryTools.class);
-
     private final EmailQueryService queryService;
-    private final ObjectMapper objectMapper;
-    private final MeterRegistry meterRegistry;
+    private final McpToolObserver observer;
 
-    public MailQueryTools(
-            EmailQueryService queryService,
-            ObjectMapper objectMapper,
-            MeterRegistry meterRegistry) {
+    public MailQueryTools(EmailQueryService queryService, McpToolObserver observer) {
         this.queryService = queryService;
-        this.objectMapper = objectMapper;
-        this.meterRegistry = meterRegistry;
+        this.observer = observer;
     }
 
     /**
@@ -79,46 +62,48 @@ public class MailQueryTools {
                                         + "Returns a JSON object with the total count and the documents on the requested page; "
                                         + "each document includes sha256, the digest of the archived original .eml file.")
                         .inputSchema(
-                                jsonSchema(
+                                McpToolSchemas.jsonSchema(
                                         List.of(
-                                                arg(
+                                                McpToolSchemas.arg(
                                                         "keyword",
                                                         "Free-text keyword searched in subject, sender, from, to and message id",
                                                         false),
-                                                arg("sender", "Exact sender address", false),
-                                                arg("from", "Exact from address", false),
-                                                arg("to", "Exact to address", false),
-                                                arg("cc", "Exact cc address", false),
-                                                arg("messageId", "Exact Message-Id", false),
-                                                arg(
+                                                McpToolSchemas.arg(
+                                                        "sender", "Exact sender address", false),
+                                                McpToolSchemas.arg(
+                                                        "from", "Exact from address", false),
+                                                McpToolSchemas.arg("to", "Exact to address", false),
+                                                McpToolSchemas.arg("cc", "Exact cc address", false),
+                                                McpToolSchemas.arg(
+                                                        "messageId", "Exact Message-Id", false),
+                                                McpToolSchemas.arg(
                                                         "receivedTimeGe",
                                                         "Received time greater than or equal to, ISO-8601",
                                                         false),
-                                                arg(
+                                                McpToolSchemas.arg(
                                                         "receivedTimeLt",
                                                         "Received time less than, ISO-8601",
                                                         false),
-                                                arg(
+                                                McpToolSchemas.arg(
                                                         "page",
                                                         "integer",
                                                         "Zero-based page number, default 0",
                                                         false),
-                                                arg(
+                                                McpToolSchemas.arg(
                                                         "size",
                                                         "integer",
                                                         "Page size, default 20, max 100",
-                                                        false)),
-                                        List.of()))
+                                                        false))))
                         .build();
 
         return McpServerFeatures.SyncToolSpecification.builder()
                 .tool(tool)
                 .callHandler(
                         (exchange, request) ->
-                                observed(
+                                observer.observed(
                                         "search_mails",
                                         () ->
-                                                ok(
+                                                observer.ok(
                                                         queryService.search(
                                                                 toSearchRequest(
                                                                         request.arguments())))))
@@ -135,31 +120,33 @@ public class MailQueryTools {
                                         + "(MongoDB document id / object storage key) from the Elasticsearch mail_info index. "
                                         + "The document includes sender, from, to, cc, messageId, receivedTime, subject, "
                                         + "contentType, attachmentNames and sha256 (the digest of the original .eml file). "
-                                        + "Returns the document as JSON, or an error when it does not exist.")
+                                        + "Returns the document as JSON, or an error when it does not exist. "
+                                        + "The id can be passed to reply_mail or forward_mail to answer or forward the email.")
                         .inputSchema(
-                                jsonSchema(
+                                McpToolSchemas.jsonSchema(
                                         List.of(
-                                                arg(
+                                                McpToolSchemas.arg(
                                                         "id",
                                                         "Archive id of the email document",
-                                                        true)),
-                                        List.of("id")))
+                                                        true))))
                         .build();
 
         return McpServerFeatures.SyncToolSpecification.builder()
                 .tool(tool)
                 .callHandler(
                         (exchange, request) ->
-                                observed(
+                                observer.observed(
                                         "get_mail_by_id",
                                         () -> {
-                                            String id = stringArg(request.arguments(), "id");
+                                            String id =
+                                                    McpToolSchemas.string(
+                                                            request.arguments(), "id");
                                             Optional<MailInfoDocument> document =
                                                     queryService.findById(id);
                                             if (document.isPresent()) {
-                                                return ok(document.get());
+                                                return observer.ok(document.get());
                                             }
-                                            return error(
+                                            return observer.error(
                                                     "No mail document found with id '" + id + "'");
                                         }))
                 .build();
@@ -175,36 +162,38 @@ public class MailQueryTools {
                                         + "the same optional filters as search_mails (pagination is ignored). "
                                         + "Times are ISO-8601 instants. Returns a JSON object with the count.")
                         .inputSchema(
-                                jsonSchema(
+                                McpToolSchemas.jsonSchema(
                                         List.of(
-                                                arg(
+                                                McpToolSchemas.arg(
                                                         "keyword",
                                                         "Free-text keyword searched in subject, sender, from, to and message id",
                                                         false),
-                                                arg("sender", "Exact sender address", false),
-                                                arg("from", "Exact from address", false),
-                                                arg("to", "Exact to address", false),
-                                                arg("cc", "Exact cc address", false),
-                                                arg("messageId", "Exact Message-Id", false),
-                                                arg(
+                                                McpToolSchemas.arg(
+                                                        "sender", "Exact sender address", false),
+                                                McpToolSchemas.arg(
+                                                        "from", "Exact from address", false),
+                                                McpToolSchemas.arg("to", "Exact to address", false),
+                                                McpToolSchemas.arg("cc", "Exact cc address", false),
+                                                McpToolSchemas.arg(
+                                                        "messageId", "Exact Message-Id", false),
+                                                McpToolSchemas.arg(
                                                         "receivedTimeGe",
                                                         "Received time greater than or equal to, ISO-8601",
                                                         false),
-                                                arg(
+                                                McpToolSchemas.arg(
                                                         "receivedTimeLt",
                                                         "Received time less than, ISO-8601",
-                                                        false)),
-                                        List.of()))
+                                                        false))))
                         .build();
 
         return McpServerFeatures.SyncToolSpecification.builder()
                 .tool(tool)
                 .callHandler(
                         (exchange, request) ->
-                                observed(
+                                observer.observed(
                                         "count_mails",
                                         () ->
-                                                ok(
+                                                observer.ok(
                                                         Map.of(
                                                                 "count",
                                                                 queryService.count(
@@ -214,132 +203,17 @@ public class MailQueryTools {
                 .build();
     }
 
-    /**
-     * Runs one tool call with timing/metrics and a single summary log line, so every MCP invocation
-     * (including error results and exceptions) is observable without logging request content.
-     */
-    private McpSchema.CallToolResult observed(
-            String toolName, Supplier<McpSchema.CallToolResult> invocation) {
-        long startedNanos = System.nanoTime();
-        try {
-            McpSchema.CallToolResult result = invocation.get();
-            record(toolName, startedNanos, result.isError() ? "error" : "success", null);
-            return result;
-        } catch (RuntimeException e) {
-            record(toolName, startedNanos, "error", e);
-            throw e;
-        }
-    }
-
-    private void record(
-            String toolName, long startedNanos, String outcome, RuntimeException failure) {
-        Duration duration = Duration.ofNanos(System.nanoTime() - startedNanos);
-        meterRegistry.timer("mail.mcp.tool.duration", "tool", toolName).record(duration);
-        meterRegistry
-                .counter("mail.mcp.tool.calls", "tool", toolName, "outcome", outcome)
-                .increment();
-        if (failure != null) {
-            log.error(
-                    "MCP tool call failed tool={} durationMs={}",
-                    toolName,
-                    duration.toMillis(),
-                    failure);
-        } else if ("error".equals(outcome)) {
-            log.warn(
-                    "MCP tool call returned an error tool={} durationMs={}",
-                    toolName,
-                    duration.toMillis());
-        } else {
-            log.info(
-                    "MCP tool call succeeded tool={} durationMs={}", toolName, duration.toMillis());
-        }
-    }
-
     private MailSearchRequest toSearchRequest(Map<String, Object> arguments) {
         return new MailSearchRequest(
-                stringArg(arguments, "keyword"),
-                stringArg(arguments, "sender"),
-                stringArg(arguments, "from"),
-                stringArg(arguments, "to"),
-                stringArg(arguments, "cc"),
-                stringArg(arguments, "messageId"),
-                instantArg(arguments, "receivedTimeGe"),
-                instantArg(arguments, "receivedTimeLt"),
-                intArg(arguments, "page", 0),
-                intArg(arguments, "size", 20));
-    }
-
-    private McpSchema.CallToolResult ok(Object value) {
-        try {
-            String json = objectMapper.writeValueAsString(value);
-            return McpSchema.CallToolResult.builder()
-                    .content(List.of(new McpSchema.TextContent(json)))
-                    .build();
-        } catch (JsonProcessingException e) {
-            return error("Failed to serialize result: " + e.getMessage());
-        }
-    }
-
-    private McpSchema.CallToolResult error(String message) {
-        return McpSchema.CallToolResult.builder()
-                .content(List.of(new McpSchema.TextContent(message)))
-                .isError(true)
-                .build();
-    }
-
-    private McpSchema.JsonSchema jsonSchema(
-            List<Map<String, Object>> properties, List<String> required) {
-        Map<String, Object> propertyMap = new LinkedHashMap<>();
-        properties.forEach(
-                property -> {
-                    String name = String.valueOf(property.get("name"));
-                    Map<String, Object> schema = new LinkedHashMap<>(property);
-                    schema.remove("name");
-                    propertyMap.put(name, schema);
-                });
-        return new McpSchema.JsonSchema("object", propertyMap, required, false, null, null);
-    }
-
-    private Map<String, Object> arg(String name, String description, boolean required) {
-        return arg(name, TYPE_STRING, description, required);
-    }
-
-    private Map<String, Object> arg(
-            String name, String type, String description, boolean required) {
-        Map<String, Object> property = new LinkedHashMap<>();
-        property.put("name", name);
-        property.put("type", type);
-        property.put("description", description);
-        return property;
-    }
-
-    private String stringArg(Map<String, Object> arguments, String key) {
-        if (arguments == null) {
-            return null;
-        }
-        Object value = arguments.get(key);
-        return value == null ? null : String.valueOf(value);
-    }
-
-    private int intArg(Map<String, Object> arguments, String key, int defaultValue) {
-        if (arguments == null) {
-            return defaultValue;
-        }
-        Object value = arguments.get(key);
-        if (value == null) {
-            return defaultValue;
-        }
-        try {
-            return value instanceof Number number
-                    ? number.intValue()
-                    : Integer.parseInt(String.valueOf(value));
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
-    }
-
-    private Instant instantArg(Map<String, Object> arguments, String key) {
-        String value = stringArg(arguments, key);
-        return value == null ? null : Instant.parse(value);
+                McpToolSchemas.string(arguments, "keyword"),
+                McpToolSchemas.string(arguments, "sender"),
+                McpToolSchemas.string(arguments, "from"),
+                McpToolSchemas.string(arguments, "to"),
+                McpToolSchemas.string(arguments, "cc"),
+                McpToolSchemas.string(arguments, "messageId"),
+                McpToolSchemas.instant(arguments, "receivedTimeGe"),
+                McpToolSchemas.instant(arguments, "receivedTimeLt"),
+                McpToolSchemas.integer(arguments, "page", 0),
+                McpToolSchemas.integer(arguments, "size", 20));
     }
 }

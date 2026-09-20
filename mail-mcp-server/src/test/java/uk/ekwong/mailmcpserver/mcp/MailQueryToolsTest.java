@@ -50,10 +50,11 @@ class MailQueryToolsTest {
     private final MailQueryTools tools =
             new MailQueryTools(
                     queryService,
-                    new ObjectMapper()
-                            .registerModule(new JavaTimeModule())
-                            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS),
-                    meterRegistry);
+                    new McpToolObserver(
+                            new ObjectMapper()
+                                    .registerModule(new JavaTimeModule())
+                                    .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS),
+                            meterRegistry));
 
     private MailInfoDocument sampleDocument;
 

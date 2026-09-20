@@ -23,6 +23,11 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (no Base64 encoding needed). Uploaded files share the 10 MB / 20 MB limits, file names are
   sanitized, and the servlet multipart limits default to 12 MB / 30 MB so that an oversized
   attachment still receives the documented JSON `400` response.
+- MCP tools `send_mail`, `reply_mail` and `forward_mail` expose the same outbound mail
+  capabilities to MCP clients, with the SMTP server and account supplied per call (never stored).
+  They are marked as side-effecting (`readOnlyHint=false`, `openWorldHint=true`), report SMTP and
+  validation failures as tool errors and are covered by the shared
+  `mail.mcp.tool.calls` / `mail.mcp.tool.duration` metrics.
 
 ## [2.0.0] - 2026-09-18
 

@@ -18,15 +18,19 @@ package uk.ekwong.mailmcpserver.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.server.McpServer;
+import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.McpSyncServer;
 import io.modelcontextprotocol.server.transport.WebMvcStreamableServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.function.RouterFunction;
 import org.springframework.web.servlet.function.ServerResponse;
 import uk.ekwong.mailmcpserver.mcp.MailQueryTools;
+import uk.ekwong.mailmcpserver.mcp.MailSendTools;
 
 /**
  * Wires the standard Spring MCP server:
@@ -35,7 +39,8 @@ import uk.ekwong.mailmcpserver.mcp.MailQueryTools;
  *   <li>{@link WebMvcStreamableServerTransportProvider} exposes the MCP protocol endpoint
  *       (Streamable HTTP) on {@code /mcp};
  *   <li>{@link McpSyncServer} registers the mail query tools from {@link MailQueryTools} and serves
- *       them to MCP clients.
+ *       them to MCP clients, together with the outbound mail tools from {@link MailSendTools}
+ *       (send_mail / reply_mail / forward_mail).
  * </ul>
  */
 @Configuration
@@ -59,13 +64,21 @@ public class McpServerConfig {
     @Bean(destroyMethod = "close")
     public McpSyncServer mcpSyncServer(
             WebMvcStreamableServerTransportProvider transportProvider,
-            MailQueryTools mailQueryTools) {
+            MailQueryTools mailQueryTools,
+            MailSendTools mailSendTools) {
+        List<McpServerFeatures.SyncToolSpecification> tools =
+                new ArrayList<>(mailQueryTools.toolSpecifications());
+        tools.addAll(mailSendTools.toolSpecifications());
         return McpServer.sync(transportProvider)
                 .serverInfo("mail-mcp-server", "2.0.0")
                 .instructions(
-                        "Query the archived journal email metadata in Elasticsearch (mail_info index).")
+                        "Query the archived journal email metadata in Elasticsearch (mail_info index) with "
+                                + "search_mails, get_mail_by_id and count_mails, and send mail with send_mail, "
+                                + "reply_mail and forward_mail. The sending tools take the SMTP server and account "
+                                + "as arguments for a single delivery; reply_mail and forward_mail take the archive "
+                                + "id returned by the query tools.")
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
-                .tools(mailQueryTools.toolSpecifications())
+                .tools(tools)
                 .build();
     }
 }

@@ -215,8 +215,48 @@ curl -X POST http://localhost:8082/api/mails/forward \
   业务超限时返回与其他接口一致的 JSON `400`，只有超过 servlet 上限时才由容器直接返回
   `413`（无响应体）。调整 `app.send.*` 上限时请同步调整这两项。
 
-## 错误响应
+## MCP 工具
 
+除了 HTTP 接口，mail-mcp-server 还通过 MCP 暴露三个等价的工具（参数与 HTTP JSON 请求体一致）：
+
+| 工具 | 对应能力 |
+| --- | --- |
+| `send_mail` | 直接发送（`to` 必填） |
+| `reply_mail` | 回复归档邮件：`id` + 发送参数，可选 `replyAll` / `includeOriginalBody` / `includeOriginalAttachments` |
+| `forward_mail` | 转发归档邮件：`id` + 发送参数（`to` 必填），默认携带原附件 |
+
+其中 `id` 就是 `search_mails` / `get_mail_by_id` 返回的归档 id，因此模型可以「先查询、再回复/转发」。
+MCP 调用示例（JSON-RPC，真实投递）：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "tools/call",
+  "params": {
+    "name": "reply_mail",
+    "arguments": {
+      "id": "YWxpY2VAZXhhbXBsZS5jb20=_PG9yaWdpbmFsLTEyM0BleGFtcGxlLmNvbT4=",
+      "smtpHost": "smtp.example.com",
+      "smtpPort": 587,
+      "smtpUsername": "alice@example.com",
+      "smtpPassword": "secret",
+      "content": "已经收到，下午回复详细意见。",
+      "replyAll": true
+    }
+  }
+}
+```
+
+与 HTTP 接口的差异：
+
+- 附件只能以 Base64 传入（MCP 工具参数是 JSON，没有文件上传）；
+- SMTP 凭据同样由每次调用传入、服务端不保存；工具描述已提示这是真实投递（
+  `readOnlyHint=false`、`openWorldHint=true`）并提示不要回显密码；
+- 参数校验失败、归档原件缺失、SMTP 不可达/被拒收都返回 `isError=true` 的错误文本，
+  不抛协议级异常。
+
+## 错误响应
 错误统一返回 JSON：`{"error": "..."}`。
 
 | 状态码 | 场景 |

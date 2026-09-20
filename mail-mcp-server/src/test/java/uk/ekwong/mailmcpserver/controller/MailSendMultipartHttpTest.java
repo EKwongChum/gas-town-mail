@@ -164,6 +164,54 @@ class MailSendMultipartHttpTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
     }
 
+    @Test
+    void listsTheQueryAndSendingToolsOverTheMcpEndpoint() {
+        HttpHeaders initializeHeaders = mcpHeaders();
+        ResponseEntity<String> initialized =
+                restTemplate.postForEntity(
+                        "/mcp",
+                        new HttpEntity<>(
+                                """
+                                {"jsonrpc":"2.0","id":1,"method":"initialize","params":
+                                {"protocolVersion":"2025-03-26","capabilities":{},
+                                "clientInfo":{"name":"test","version":"1.0"}}}
+                                """,
+                                initializeHeaders),
+                        String.class);
+        assertThat(initialized.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        HttpHeaders listHeaders = mcpHeaders();
+        String sessionId = initialized.getHeaders().getFirst("Mcp-Session-Id");
+        if (sessionId != null) {
+            listHeaders.set("Mcp-Session-Id", sessionId);
+        }
+        ResponseEntity<String> response =
+                restTemplate.postForEntity(
+                        "/mcp",
+                        new HttpEntity<>(
+                                """
+                                {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
+                                """,
+                                listHeaders),
+                        String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody())
+                .contains("search_mails")
+                .contains("get_mail_by_id")
+                .contains("count_mails")
+                .contains("send_mail")
+                .contains("reply_mail")
+                .contains("forward_mail");
+    }
+
+    private HttpHeaders mcpHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setAccept(List.of(MediaType.APPLICATION_JSON, MediaType.TEXT_EVENT_STREAM));
+        return headers;
+    }
+
     private MultiValueMap<String, Object> multipartBody(
             Map<String, Object> request, ByteArrayResource file) throws Exception {
         HttpHeaders jsonHeaders = new HttpHeaders();
