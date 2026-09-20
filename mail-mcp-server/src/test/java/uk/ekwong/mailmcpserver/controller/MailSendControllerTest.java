@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -37,6 +38,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.RequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -206,6 +208,122 @@ class MailSendControllerTest {
         mockMvc.perform(json("/api/mails/send", sendRequest()))
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.error").value(containsString("connection refused")));
+    }
+
+    @Test
+    void sendsMailWithUploadedMultipartAttachments() throws Exception {
+        MockMultipartFile attachment =
+                new MockMultipartFile(
+                        "attachments",
+                        "note.txt",
+                        "text/plain",
+                        "attachment-data".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(
+                        multipart("/api/mails/send")
+                                .file(requestPart(sendRequest()))
+                                .file(attachment))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject").value("Hello"))
+                .andExpect(jsonPath("$.attachmentCount").value(1))
+                .andExpect(jsonPath("$.attachmentBytes").value(15));
+
+        MimeMessage sent = transport.lastMessage();
+        assertThat(sent.getSubject()).isEqualTo("Hello");
+        Multipart multipart = (Multipart) sent.getContent();
+        assertThat(multipart.getBodyPart(1).getFileName()).isEqualTo("note.txt");
+        assertThat(
+                        new String(
+                                multipart.getBodyPart(1).getInputStream().readAllBytes(),
+                                StandardCharsets.UTF_8))
+                .isEqualTo("attachment-data");
+    }
+
+    @Test
+    void forwardsAnArchivedMailWithUploadedMultipartAttachments() throws Exception {
+        givenArchivedMail();
+        Map<String, Object> body = sendRequest();
+        body.put("id", ARCHIVE_ID);
+        body.put("to", List.of("Dave <dave@example.com>"));
+        body.remove("subject");
+        MockMultipartFile attachment =
+                new MockMultipartFile(
+                        "attachments",
+                        "extra.txt",
+                        "text/plain",
+                        "extra".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(multipart("/api/mails/forward").file(requestPart(body)).file(attachment))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject").value("Fwd: Quarterly report"))
+                .andExpect(jsonPath("$.attachmentCount").value(2));
+
+        Multipart multipart = (Multipart) transport.lastMessage().getContent();
+        assertThat(multipart.getCount()).isEqualTo(3);
+        assertThat(multipart.getBodyPart(1).getFileName()).isEqualTo("extra.txt");
+        assertThat(multipart.getBodyPart(2).getFileName()).isEqualTo("report.pdf");
+    }
+
+    @Test
+    void repliesToAnArchivedMailWithAMultipartRequest() throws Exception {
+        givenArchivedMail();
+        Map<String, Object> body = sendRequest();
+        body.put("id", ARCHIVE_ID);
+        body.remove("to");
+        body.remove("subject");
+        body.put("replyAll", true);
+
+        mockMvc.perform(multipart("/api/mails/reply").file(requestPart(body)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.subject").value("Re: Quarterly report"))
+                .andExpect(jsonPath("$.to[0]").value("Alice Replies <alice.reply@example.com>"))
+                .andExpect(jsonPath("$.cc[0]").value("Bob <bob@example.com>"));
+    }
+
+    @Test
+    void returns400WhenTheMultipartRequestPartIsMissing() throws Exception {
+        MockMultipartFile attachment =
+                new MockMultipartFile(
+                        "attachments",
+                        "note.txt",
+                        "text/plain",
+                        "x".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(multipart("/api/mails/send").file(attachment))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Missing required part 'request'"));
+    }
+
+    @Test
+    void returns400ForInvalidMultipartUploads() throws Exception {
+        MockMultipartFile empty =
+                new MockMultipartFile("attachments", "empty.txt", "text/plain", new byte[0]);
+
+        mockMvc.perform(multipart("/api/mails/send").file(requestPart(sendRequest())).file(empty))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(containsString("has no content")));
+
+        Map<String, Object> withBase64 = sendRequest();
+        withBase64.put(
+                "attachments", List.of(Map.of("filename", "a.bin", "contentBase64", "YWxpY2U=")));
+        mockMvc.perform(multipart("/api/mails/send").file(requestPart(withBase64)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(containsString("multipart file parts")));
+    }
+
+    @Test
+    void returns415ForAnUnsupportedContentType() throws Exception {
+        mockMvc.perform(post("/api/mails/send").contentType(MediaType.TEXT_PLAIN).content("hello"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.error").value(containsString("multipart/form-data")));
+    }
+
+    private MockMultipartFile requestPart(Map<String, Object> body) throws Exception {
+        return new MockMultipartFile(
+                "request",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                objectMapper.writeValueAsBytes(body));
     }
 
     private void givenArchivedMail() {

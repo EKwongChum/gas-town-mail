@@ -16,6 +16,7 @@
 
 package uk.ekwong.mailmcpserver.send;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -23,6 +24,7 @@ import java.util.Locale;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.util.unit.DataSize;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Turns a request into a validated {@link MailSendCommand}: SMTP coordinates, addresses and
@@ -42,11 +44,20 @@ public class MailSendRequestMapper {
 
     /** Validates the send parameters and decodes the attachments of the request. */
     public MailSendCommand toCommand(MailSendFields request) {
+        return toCommand(
+                request, decodeAttachments(request == null ? null : request.attachments()));
+    }
+
+    /**
+     * Validates the send parameters with attachments that are already materialized, e.g. decoded
+     * from Base64 or read from multipart file parts.
+     */
+    public MailSendCommand toCommand(MailSendFields request, List<MailAttachment> attachments) {
         if (request == null) {
             throw new IllegalArgumentException("request body must not be null");
         }
         SmtpSettings smtp = smtpSettings(request);
-        List<MailAttachment> attachments = decodeAttachments(request.attachments());
+        validateAttachmentLimits(attachments);
         return new MailSendCommand(
                 smtp,
                 from(request.from(), smtp),
@@ -60,28 +71,74 @@ public class MailSendRequestMapper {
                 List.of());
     }
 
+    /**
+     * Builds a command for a multipart request: attachments are uploaded as file parts, so the
+     * Base64 {@code attachments} field of the JSON part must stay empty.
+     */
+    public MailSendCommand toMultipartCommand(MailSendFields request, List<MultipartFile> files) {
+        if (request != null && request.attachments() != null && !request.attachments().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "attachments must be uploaded as multipart file parts, not as Base64 content");
+        }
+        return toCommand(request, toAttachments(files));
+    }
+
+    /**
+     * Reads the attachments uploaded as multipart file parts. Oversized uploads are rejected from
+     * their reported size before they are read into memory.
+     */
+    public List<MailAttachment> toAttachments(List<MultipartFile> files) {
+        List<MailAttachment> attachments = new ArrayList<>();
+        if (files == null || files.isEmpty()) {
+            return attachments;
+        }
+        for (MultipartFile file : files) {
+            if (file == null) {
+                continue;
+            }
+            String filename = sanitizeFilename(file.getOriginalFilename());
+            if (file.isEmpty()) {
+                throw new IllegalArgumentException("attachment '" + filename + "' has no content");
+            }
+            if (file.getSize() > properties.getMaxAttachmentSize().toBytes()) {
+                throw attachmentTooLarge(filename, file.getSize());
+            }
+            attachments.add(new MailAttachment(filename, contentTypeOf(file), read(file)));
+        }
+        validateAttachmentLimits(attachments);
+        return attachments;
+    }
+
     /** Checks the per-attachment and total attachment limits, e.g. after forwarding attachments. */
     public void validateAttachmentLimits(List<MailAttachment> attachments) {
         List<MailAttachment> all = attachments == null ? List.of() : attachments;
         for (MailAttachment attachment : all) {
             if (attachment.size() > properties.getMaxAttachmentSize().toBytes()) {
-                throw new IllegalArgumentException(
-                        "attachment '"
-                                + attachment.filename()
-                                + "' is "
-                                + describe(DataSize.ofBytes(attachment.size()))
-                                + ", exceeding the per-attachment limit of "
-                                + describe(properties.getMaxAttachmentSize()));
+                throw attachmentTooLarge(attachment.filename(), attachment.size());
             }
         }
         long total = all.stream().mapToLong(MailAttachment::size).sum();
         if (total > properties.getMaxTotalAttachmentSize().toBytes()) {
-            throw new IllegalArgumentException(
-                    "total attachment size "
-                            + describe(DataSize.ofBytes(total))
-                            + " exceeds the limit of "
-                            + describe(properties.getMaxTotalAttachmentSize()));
+            throw totalTooLarge(total);
         }
+    }
+
+    private IllegalArgumentException attachmentTooLarge(String filename, long bytes) {
+        return new IllegalArgumentException(
+                "attachment '"
+                        + filename
+                        + "' is "
+                        + describe(DataSize.ofBytes(bytes))
+                        + ", exceeding the per-attachment limit of "
+                        + describe(properties.getMaxAttachmentSize()));
+    }
+
+    private IllegalArgumentException totalTooLarge(long bytes) {
+        return new IllegalArgumentException(
+                "total attachment size "
+                        + describe(DataSize.ofBytes(bytes))
+                        + " exceeds the limit of "
+                        + describe(properties.getMaxTotalAttachmentSize()));
     }
 
     private SmtpSettings smtpSettings(MailSendFields request) {
@@ -141,29 +198,57 @@ public class MailSendRequestMapper {
             if (request == null) {
                 continue;
             }
-            if (!StringUtils.hasText(request.filename())) {
-                throw new IllegalArgumentException("attachment filename must not be blank");
-            }
+            String filename = sanitizeFilename(request.filename());
             String encoded = trimToNull(request.contentBase64());
             if (encoded == null) {
-                throw new IllegalArgumentException(
-                        "attachment '" + request.filename() + "' has no content");
+                throw new IllegalArgumentException("attachment '" + filename + "' has no content");
             }
             byte[] content;
             try {
                 content = Base64.getMimeDecoder().decode(encoded);
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException(
-                        "attachment '" + request.filename() + "' content is not valid Base64");
+                        "attachment '" + filename + "' content is not valid Base64");
             }
             String contentType =
                     StringUtils.hasText(request.contentType())
                             ? request.contentType().trim()
                             : DEFAULT_CONTENT_TYPE;
-            attachments.add(new MailAttachment(request.filename().trim(), contentType, content));
+            attachments.add(new MailAttachment(filename, contentType, content));
         }
-        validateAttachmentLimits(attachments);
         return attachments;
+    }
+
+    private String contentTypeOf(MultipartFile file) {
+        return StringUtils.hasText(file.getContentType())
+                ? file.getContentType().trim()
+                : DEFAULT_CONTENT_TYPE;
+    }
+
+    private byte[] read(MultipartFile file) {
+        try {
+            return file.getBytes();
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "could not read the uploaded attachment '" + file.getOriginalFilename() + "'",
+                    e);
+        }
+    }
+
+    /**
+     * Normalizes an attachment file name: any directory part a client sent is dropped and control
+     * characters are removed, so the name cannot break out of the MIME header it is written to.
+     */
+    private String sanitizeFilename(String filename) {
+        if (!StringUtils.hasText(filename)) {
+            throw new IllegalArgumentException("attachment filename must not be blank");
+        }
+        String name = StringUtils.getFilename(filename.trim().replace('\\', '/'));
+        name = name == null ? "" : name.replaceAll("\\p{Cntrl}", "").trim();
+        if (name.isEmpty()) {
+            throw new IllegalArgumentException("attachment filename must not be blank");
+        }
+        return name;
     }
 
     private String describe(DataSize size) {

@@ -24,6 +24,7 @@ import java.util.Base64;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.util.unit.DataSize;
 
 class MailSendRequestMapperTest {
@@ -299,6 +300,108 @@ class MailSendRequestMapperTest {
         assertThatThrownBy(() -> mapper.toCommand(null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("request body must not be null");
+    }
+
+    @Test
+    void readsAttachmentsFromMultipartFiles() {
+        MockMultipartFile report =
+                new MockMultipartFile(
+                        "attachments",
+                        "report.pdf",
+                        "application/pdf",
+                        "pdf-bytes".getBytes(StandardCharsets.UTF_8));
+        MockMultipartFile notes =
+                new MockMultipartFile(
+                        "attachments", "notes.txt", null, "notes".getBytes(StandardCharsets.UTF_8));
+
+        MailSendCommand command = mapper.toMultipartCommand(sendRequest(), List.of(report, notes));
+
+        assertThat(command.from()).isEqualTo("alice@example.com");
+        assertThat(command.subject()).isEqualTo("Hello");
+        assertThat(command.attachments()).hasSize(2);
+        assertThat(command.attachments().get(0).filename()).isEqualTo("report.pdf");
+        assertThat(command.attachments().get(0).contentType()).isEqualTo("application/pdf");
+        assertThat(new String(command.attachments().get(0).content(), StandardCharsets.UTF_8))
+                .isEqualTo("pdf-bytes");
+        assertThat(command.attachments().get(1).contentType())
+                .isEqualTo("application/octet-stream");
+        assertThat(command.attachmentBytes()).isEqualTo(14);
+    }
+
+    @Test
+    void acceptsMultipartRequestsWithoutFiles() {
+        MailSendCommand command = mapper.toMultipartCommand(sendRequest(), null);
+
+        assertThat(command.attachments()).isEmpty();
+        assertThat(command.smtp().host()).isEqualTo("smtp.example.com");
+    }
+
+    @Test
+    void stripsDirectoryPartsAndControlCharactersFromUploadedFileNames() {
+        MockMultipartFile windowsPath =
+                new MockMultipartFile(
+                        "attachments",
+                        "C:\\Users\\alice\\re\r\nport.pdf",
+                        "application/pdf",
+                        "x".getBytes(StandardCharsets.UTF_8));
+        MockMultipartFile unixPath =
+                new MockMultipartFile(
+                        "attachments",
+                        "/tmp/uploads/notes.txt",
+                        "text/plain",
+                        "y".getBytes(StandardCharsets.UTF_8));
+
+        MailSendCommand command =
+                mapper.toMultipartCommand(sendRequest(), List.of(windowsPath, unixPath));
+
+        assertThat(command.attachments())
+                .extracting(MailAttachment::filename)
+                .containsExactly("report.pdf", "notes.txt");
+    }
+
+    @Test
+    void rejectsEmptyOrNamelessUploads() {
+        MockMultipartFile empty =
+                new MockMultipartFile("attachments", "empty.txt", "text/plain", new byte[0]);
+        MockMultipartFile nameless =
+                new MockMultipartFile(
+                        "attachments", null, "text/plain", "x".getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> mapper.toMultipartCommand(sendRequest(), List.of(empty)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("attachment 'empty.txt' has no content");
+        assertThatThrownBy(() -> mapper.toMultipartCommand(sendRequest(), List.of(nameless)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("attachment filename must not be blank");
+    }
+
+    @Test
+    void rejectsUploadedAttachmentsOverTheConfiguredLimits() {
+        properties.setMaxAttachmentSize(DataSize.ofBytes(4));
+        properties.setMaxTotalAttachmentSize(DataSize.ofBytes(6));
+        MockMultipartFile big =
+                new MockMultipartFile(
+                        "attachments", "big.bin", null, "12345".getBytes(StandardCharsets.UTF_8));
+        MockMultipartFile small =
+                new MockMultipartFile(
+                        "attachments", "small.bin", null, "1234".getBytes(StandardCharsets.UTF_8));
+
+        assertThatThrownBy(() -> mapper.toMultipartCommand(sendRequest(), List.of(big)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("per-attachment limit");
+        assertThatThrownBy(() -> mapper.toMultipartCommand(sendRequest(), List.of(small, small)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("total attachment size");
+    }
+
+    @Test
+    void rejectsBase64AttachmentsInMultipartRequests() {
+        MailSendRequest request =
+                sendRequest(new MailAttachmentRequest("report.pdf", null, base64("pdf")));
+
+        assertThatThrownBy(() -> mapper.toMultipartCommand(request, List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("multipart file parts");
     }
 
     private MailSendRequest requestWithEncryption(String encryption) {

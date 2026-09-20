@@ -21,8 +21,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import uk.ekwong.mailmcpserver.download.OriginalMailNotFoundException;
 import uk.ekwong.mailmcpserver.send.MailSendFailedException;
 
@@ -30,7 +33,8 @@ import uk.ekwong.mailmcpserver.send.MailSendFailedException;
  * Error handling for the outbound mail endpoints: {@code 400} for invalid requests (missing SMTP
  * coordinates, malformed addresses, attachment limits), {@code 404} when the archived original mail
  * of a reply/forward does not exist and {@code 502} when the SMTP server rejected the mail or could
- * not be reached.
+ * not be reached. Multipart requests additionally map an exceeded upload limit and a missing {@code
+ * request} part to {@code 400}, and an unsupported content type to {@code 415}.
  */
 @RestControllerAdvice(assignableTypes = MailSendController.class)
 public class MailSendExceptionHandler {
@@ -46,6 +50,34 @@ public class MailSendExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> handleUnreadableBody(HttpMessageNotReadableException e) {
         return ResponseEntity.badRequest().body(new ApiError("Malformed request body"));
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiError> handleMissingPart(MissingServletRequestPartException e) {
+        log.warn("Missing multipart part: {}", e.getRequestPartName());
+        return ResponseEntity.badRequest()
+                .body(new ApiError("Missing required part '" + e.getRequestPartName() + "'"));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiError> handleUploadTooLarge(MaxUploadSizeExceededException e) {
+        log.warn("Rejected an oversized multipart upload: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(
+                        new ApiError(
+                                "Uploaded attachments exceed the multipart limits "
+                                        + "(spring.servlet.multipart.max-file-size / max-request-size)"));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiError> handleUnsupportedMediaType(
+            HttpMediaTypeNotSupportedException e) {
+        log.warn("Unsupported request content type: {}", e.getContentType());
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(
+                        new ApiError(
+                                "Unsupported request content type; use application/json or "
+                                        + "multipart/form-data"));
     }
 
     @ExceptionHandler(OriginalMailNotFoundException.class)

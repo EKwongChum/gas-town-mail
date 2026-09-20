@@ -1,6 +1,15 @@
 spring:
   application:
     name: mail-mcp-server
+  servlet:
+    multipart:
+      # Multipart attachment upload (POST /api/mails/*). These servlet limits sit slightly above
+      # app.send.max-attachment-size / max-total-attachment-size so an oversized upload is normally
+      # rejected by the application with the same JSON 400 as the JSON endpoints; only uploads
+      # beyond these limits are answered by the container with a bare 413. Raise both when the
+      # app.send limits are raised.
+      max-file-size: ${MAIL_SEND_MULTIPART_MAX_FILE_SIZE:12MB}
+      max-request-size: ${MAIL_SEND_MULTIPART_MAX_REQUEST_SIZE:30MB}
   elasticsearch:
     uris: http://localhost:9200
     connection-timeout: 5s

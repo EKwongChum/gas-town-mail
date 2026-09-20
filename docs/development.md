@@ -8,7 +8,7 @@
 ./mvnw test     # 在项目根目录运行，构建全部模块
 ```
 
-共 188 个测试，按模块分布：
+共 203 个测试，按模块分布：
 
 - **mail-common（21）**：id 生成、journal 识别、原邮件提取、邮件详情解析（含中文主题解码、
   ReceivedTime、content-type、附件名）、原邮件字节的 SHA-256 摘要计算，以及 HTTP 请求
@@ -29,7 +29,7 @@
   （无效载荷、objectKey 读取、索引复用、sha256 取自通知或回退计算）、批量删除（存在/缺失 id、
   去重、空请求与数量上限、HTTP 400/null body 处理）、原件下载（读取、未找到 404、空 id 400、
   HTTP 响应头）、OpenAPI 元数据等用例；
-- **mail-mcp-server（77）**：ES 查询服务（分页搜索、页大小上限、计数、按 id 查询）、
+- **mail-mcp-server（92）**：ES 查询服务（分页搜索、页大小上限、计数、按 id 查询）、
   MCP 工具（参数解析、默认分页、按 id 查询、计数、调用成功/失败指标）、对象存储健康指示器
   （bucket 可达 / 不存在 / 端点不可达）、MCP Server 装配、OpenAPI 文档生成，
   邮件原件批量 zip 下载（S3 读取→临时文件→zip 内容、缺失 id 404、空请求/超上限 400、
@@ -39,7 +39,11 @@
   归档原件解析（多部分正文、HTML 降级、附件）、回复默认收件人/Re: 前缀/正文引用/
   In-Reply-To 与 References、replyAll 收件人排除规则、转发 Fwd: 前缀与携带原附件、
   原件缺失 404、SMTP 失败 502，以及三个 HTTP 接口的 200/400/404/502 响应），
-  发信相关配置（`app.send.*` 的 `DataSize` / `Duration` 绑定）也各有独立用例。
+  发信相关配置（`app.send.*` 的 `DataSize` / `Duration` 绑定）也各有独立用例；
+  multipart 上传另有一组用例（文件分片解码、文件名清洗、空文件/超限 400、JSON 与 multipart
+  混用 400、缺少 `request` 分片 400、Content-Type 不支持 415），以及在真实 servlet 容器
+  上启动的端到端测试（真实 multipart 解析 → 真实 SMTP 投递、应用层超限 400、超过 servlet
+  上限时容器返回 413）。
 
 ### 在容器内运行测试
 

@@ -18,6 +18,11 @@ aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `In-Reply-To`/`References` threading for replies, original attachments carried over on forward).
 - `docs/mail-sending.md` documents the three endpoints, the attachment limits, the reply/forward
   rules, the error responses and the `app.send.*` configuration.
+- The send / reply / forward endpoints also accept `multipart/form-data`, where the JSON body
+  travels in the `request` part and each attachment is uploaded as its own `attachments` file part
+  (no Base64 encoding needed). Uploaded files share the 10 MB / 20 MB limits, file names are
+  sanitized, and the servlet multipart limits default to 12 MB / 30 MB so that an oversized
+  attachment still receives the documented JSON `400` response.
 
 ## [2.0.0] - 2026-09-18
 

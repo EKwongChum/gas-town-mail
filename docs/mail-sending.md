@@ -46,6 +46,9 @@ mail-mcp-server 除了查询归档邮件（MCP）与下载原件，还提供三�
 **附件限制**：单个附件不超过 **10 MB**，单封邮件所有附件合计不超过 **20 MB**（收发件人与
 转发携带的原附件一起计算）。超限返回 `400`。限制可通过配置调整：
 
+> 附件也可以用 multipart 文件分片上传（无需 Base64），三个接口都支持，见
+> [multipart 上传附件](#multipart-上传附件send--reply--forward-通用)。
+
 ```yaml
 app:
   send:
@@ -168,6 +171,50 @@ curl -X POST http://localhost:8082/api/mails/forward \
   }'
 ```
 
+## multipart 上传附件（send / reply / forward 通用）
+
+除 JSON（附件用 Base64）外，三个接口也接受 `multipart/form-data`：
+
+- `request` 分片：与 JSON 接口**完全相同的请求体**，其 Content-Type 必须是
+  `application/json`；
+- `attachments` 分片：一个或多个文件分片，可重复；文件名与 Content-Type 取自分片本身。
+
+用 curl 发信：
+
+```bash
+curl -X POST http://localhost:8082/api/mails/send \
+  -F 'request={"smtpHost":"smtp.example.com","smtpPort":587,
+"smtpUsername":"alice@example.com","smtpPassword":"secret",
+"to":["bob@example.com"],"subject":"季度报告","content":"见附件"};type=application/json' \
+  -F 'attachments=@report.pdf' \
+  -F 'attachments=@photo.jpg'
+```
+
+回复与转发同理（URL 换成 `/api/mails/reply` / `/api/mails/forward`），`id`、`replyAll`、
+`includeOriginalAttachments` 等字段仍然写在 `request` 分片里：
+
+```bash
+curl -X POST http://localhost:8082/api/mails/forward \
+  -F 'request={"id":"<archive id>","smtpHost":"smtp.example.com","smtpPort":587,
+"smtpUsername":"alice@example.com","smtpPassword":"secret",
+"to":["dave@example.com"],"content":"请参考下面的邮件。"};type=application/json' \
+  -F 'attachments=@extra.txt'
+```
+
+规则：
+
+- 上传文件与 JSON 附件受同一套限制（`app.send.max-attachment-size` 10MB /
+  `max-total-attachment-size` 20MB），超限返回 `400`；
+- 文件名只取最后一段（浏览器可能带上完整路径，会被去掉），名称中的控制字符会被移除，
+  空文件（0 字节）返回 `400`；
+- multipart 模式下 `request` 分片里不要再写 `attachments`（Base64），否则返回 `400`
+  提示改用文件分片；
+- 多个附件分片按上传顺序依次作为附件发送，并与转发携带的原附件一起计算体积；
+- servlet 层另有一层上传上限 `spring.servlet.multipart.max-file-size` /
+  `max-request-size`（默认 `12MB` / `30MB`，见 `application.yml`）。它**刻意高于**业务上限：
+  业务超限时返回与其他接口一致的 JSON `400`，只有超过 servlet 上限时才由容器直接返回
+  `413`（无响应体）。调整 `app.send.*` 上限时请同步调整这两项。
+
 ## 错误响应
 
 错误统一返回 JSON：`{"error": "..."}`。
@@ -176,6 +223,8 @@ curl -X POST http://localhost:8082/api/mails/forward \
 | --- | --- |
 | `400` | 缺少 `smtpHost` / `smtpPort`、地址格式非法、附件缺文件名或非 Base64、附件超限、转发未传 `to`、请求体不是合法 JSON |
 | `404` | reply / forward 的 `id` 在对象存储中不存在（可能尚未归档或已被清理） |
+| `413` | multipart 上传超过 servlet 层 `spring.servlet.multipart.*` 上限（多数容器直接返回，此时无响应体） |
+| `415` | 请求的 Content-Type 既不是 `application/json` 也不是 `multipart/form-data` |
 | `502` | SMTP 服务器不可达、认证失败或被拒收（错误信息包含 SMTP 返回的原因） |
 | `500` | 其他未预期错误（详情只记日志） |
 

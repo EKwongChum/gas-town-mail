@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | `/mcp` | POST | MCP Streamable HTTP 协议端点（标准 MCP 服务器接口） |
 | `/api/mail-originals/download` | POST | 按归档 id 批量下载邮件原件，返回 `.zip` |
-| `/api/mails/send` | POST | 通过请求中的 SMTP 服务器发送邮件（支持附件，单个 ≤10 MB、合计 ≤20 MB） |
+| `/api/mails/send` | POST | 通过请求中的 SMTP 服务器发送邮件（附件：JSON Base64 或 multipart 文件分片） |
 | `/api/mails/reply` | POST | 回复归档邮件：发送参数 + MCP 查询返回的 `id` |
 | `/api/mails/forward` | POST | 转发归档邮件：发送参数 + MCP 查询返回的 `id` |
 | `/v3/api-docs` | GET | OpenAPI JSON 文档 |
@@ -216,6 +216,22 @@ curl -X POST http://localhost:8082/api/mails/reply \
 ```
 
 完整字段说明、附件限制、错误码与更多示例见 [../docs/mail-sending.md](../docs/mail-sending.md)。
+
+### 附件上传的两种形式
+
+同一路径按 `Content-Type` 分流：`application/json`（附件用 `contentBase64`，单个 ≤10 MB、
+合计 ≤20 MB）或 `multipart/form-data`（`request` 分片放同样的 JSON，附件作为可重复的
+`attachments` 文件分片）：
+
+```bash
+curl -X POST http://localhost:8082/api/mails/send \
+  -F 'request={"smtpHost":"smtp.example.com","smtpPort":587,"smtpUsername":"alice@example.com",
+"smtpPassword":"secret","to":["bob@example.com"],"subject":"Hello","content":"见附件"};type=application/json' \
+  -F 'attachments=@report.pdf'
+```
+
+multipart 的额外上限是 `spring.servlet.multipart.max-file-size` / `max-request-size`
+（默认 `12MB` / `30MB`），刻意高于业务上限，以在业务超限时返回统一的 JSON `400`。
 
 ## 六、构建与运行
 

@@ -18,10 +18,14 @@ package uk.ekwong.mailmcpserver.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import uk.ekwong.mailmcpserver.send.MailCompositionService;
 import uk.ekwong.mailmcpserver.send.MailForwardRequest;
 import uk.ekwong.mailmcpserver.send.MailReplyRequest;
@@ -40,6 +44,10 @@ import uk.ekwong.mailmcpserver.send.MailSendService;
  * POST /api/mails/forward   {"id": "&lt;archive id&gt;", "smtpHost": "...", "to": ["..."], ...}
  * </pre>
  *
+ * <p>All three endpoints accept either {@code application/json} with Base64 attachments or {@code
+ * multipart/form-data}, where the {@code request} part carries the same JSON body and every
+ * attachment is uploaded as its own {@code attachments} file part.
+ *
  * <p>The archive id of the reply and forward endpoints is the id returned by the MCP tools {@code
  * search_mails} / {@code get_mail_by_id} (MongoDB {@code _id} / object storage key): the archived
  * original email is read from object storage and reused for recipients, subject, body quoting and
@@ -54,6 +62,13 @@ import uk.ekwong.mailmcpserver.send.MailSendService;
                 "Send mail through an SMTP server given in the request, reply to or forward an "
                         + "archived mail by its archive id")
 public class MailSendController {
+
+    private static final String MULTIPART_DESCRIPTION =
+            "Multipart form: the 'request' part is the JSON body documented below "
+                    + "(Content-Type: application/json) and each attachment is uploaded as an "
+                    + "'attachments' file part. Uploaded files are limited by "
+                    + "app.send.max-attachment-size / max-total-attachment-size and by "
+                    + "spring.servlet.multipart.max-file-size / max-request-size.";
 
     private final MailSendService sendService;
     private final MailSendRequestMapper requestMapper;
@@ -80,6 +95,18 @@ public class MailSendController {
         return sendService.send(requestMapper.toCommand(request));
     }
 
+    @PostMapping(value = "/send", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "Send a mail with uploaded attachments",
+            description =
+                    "Sends one mail with the attachments uploaded as multipart file parts. "
+                            + MULTIPART_DESCRIPTION)
+    public MailSendResponse sendMultipart(
+            @RequestPart("request") MailSendRequest request,
+            @RequestPart(value = "attachments", required = false) List<MultipartFile> attachments) {
+        return sendService.send(requestMapper.toMultipartCommand(request, attachments));
+    }
+
     @PostMapping("/reply")
     @Operation(
             summary = "Reply to an archived mail",
@@ -93,6 +120,21 @@ public class MailSendController {
         return sendService.send(compositionService.composeReply(request));
     }
 
+    @PostMapping(value = "/reply", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "Reply to an archived mail with uploaded attachments",
+            description =
+                    "Sends a reply to the archived mail with the given archive id, with the "
+                            + "attachments uploaded as multipart file parts. "
+                            + MULTIPART_DESCRIPTION)
+    public MailSendResponse replyMultipart(
+            @RequestPart("request") MailReplyRequest request,
+            @RequestPart(value = "attachments", required = false) List<MultipartFile> attachments) {
+        return sendService.send(
+                compositionService.composeReply(
+                        request, requestMapper.toMultipartCommand(request, attachments)));
+    }
+
     @PostMapping("/forward")
     @Operation(
             summary = "Forward an archived mail",
@@ -104,5 +146,20 @@ public class MailSendController {
                             + "are carried over unless includeOriginalAttachments is false.")
     public MailSendResponse forward(@RequestBody MailForwardRequest request) {
         return sendService.send(compositionService.composeForward(request));
+    }
+
+    @PostMapping(value = "/forward", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "Forward an archived mail with uploaded attachments",
+            description =
+                    "Forwards the archived mail with the given archive id, with the attachments "
+                            + "uploaded as multipart file parts. "
+                            + MULTIPART_DESCRIPTION)
+    public MailSendResponse forwardMultipart(
+            @RequestPart("request") MailForwardRequest request,
+            @RequestPart(value = "attachments", required = false) List<MultipartFile> attachments) {
+        return sendService.send(
+                compositionService.composeForward(
+                        request, requestMapper.toMultipartCommand(request, attachments)));
     }
 }

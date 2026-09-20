@@ -73,7 +73,14 @@ public class MailCompositionService {
 
     /** Composes the reply to an archived mail. */
     public MailSendCommand composeReply(MailReplyRequest request) {
-        MailSendCommand base = requestMapper.toCommand(request);
+        return composeReply(request, requestMapper.toCommand(request));
+    }
+
+    /**
+     * Composes the reply from send parameters that were already validated, e.g. when the
+     * attachments arrived as multipart file parts.
+     */
+    public MailSendCommand composeReply(MailReplyRequest request, MailSendCommand base) {
         OriginalEmailContent original = readOriginal(request.id());
 
         List<String> to = base.to().isEmpty() ? replyRecipients(original) : base.to();
@@ -104,7 +111,14 @@ public class MailCompositionService {
 
     /** Composes the forward of an archived mail. */
     public MailSendCommand composeForward(MailForwardRequest request) {
-        MailSendCommand base = requestMapper.toCommand(request);
+        return composeForward(request, requestMapper.toCommand(request));
+    }
+
+    /**
+     * Composes the forward from send parameters that were already validated, e.g. when the
+     * attachments arrived as multipart file parts.
+     */
+    public MailSendCommand composeForward(MailForwardRequest request, MailSendCommand base) {
         if (base.to().isEmpty()) {
             throw new IllegalArgumentException("to must not be empty when forwarding");
         }
