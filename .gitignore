@@ -10,6 +10,8 @@ data/
 *.p12
 *.jks
 *.keystore
+# the self-signed test-only key store of SmtpTlsEndToEndTest is part of the sources
+!mail-mcp-server/src/test/resources/tls/*.p12
 application-local.yml
 application-local.yaml
 application-local.properties
